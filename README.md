@@ -89,6 +89,35 @@ their own **📥 Outlook draft** button.
 This never sends anything — it hands Outlook a stack of prepared messages and you press
 Send on each.
 
+## Phone calls
+
+Every facility card has a **📞 Call script** button showing what a caller (or a synthesised
+voice) should say, personalised to that facility, with click-to-call links for the numbers
+on file. After matching a list, **📞 Download call sheet** exports every number with its own
+script as CSV.
+
+**Automated dialling is not connected.** It needs three things this app does not have: a
+telephony account to place calls, a small backend to hold the voice-provider API key, and a
+decision on call compliance. See "Automated calling" below.
+
+### Automated calling — what it would take
+
+An API key must never be committed to this repository or shipped in the page: the repo is
+public and the page is downloadable, so the key would be usable by anyone who found it, on
+the account owner's bill. Keys belong in a backend's secret store.
+
+The shape of the work:
+
+1. **A backend** (a Cloudflare Worker or similar) holding the voice-provider key and the
+   telephony credentials as secrets. The app calls the backend; the backend calls the APIs.
+2. **Telephony** — either the voice provider's own outbound calling with a purchased number,
+   or a provider such as Twilio playing generated audio.
+3. **Compliance** — automated calls using an artificial or prerecorded voice are regulated.
+   Requirements typically include identifying the business at the start of the call, an
+   opt-out mechanism, restricted calling hours, and honouring do-not-call requests; several
+   states also regulate AI-generated voices specifically. Worth a conversation with whoever
+   handles this before the first call goes out, particularly for numbers that are mobiles.
+
 ## Company directory (auto-fill contacts)
 
 The client list ships with the app as **`directory.enc.json`**, encrypted with AES-256-GCM

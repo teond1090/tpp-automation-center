@@ -189,7 +189,7 @@ details.help li{margin-bottom:.3rem}
     <div class="logo"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3z" fill="#fff" opacity=".92"/><path d="M8.2 12.3l2.6 2.6 5-5.2" stroke="#1c5cab" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <div class="brand">
       <h1>Coverage Report Chaser</h1>
-      <div class="sub">Tenant Property Protection <span class="ver">v9 · Aug 18</span></div>
+      <div class="sub">Tenant Property Protection <span class="ver">v10 · Aug 18</span></div>
     </div>
     <div class="right">
       <button class="btn" id="addBtn">+ Add customer</button>
@@ -306,6 +306,7 @@ details.help li{margin-bottom:.3rem}
       <div class="f"><label>Subject line</label><input id="tplSubject"></div>
       <div class="f"><label>First request</label><textarea id="tplFirst"></textarea></div>
       <div class="f"><label>Follow-up (if no report yet)</label><textarea id="tplFollow"></textarea></div>
+      <div class="f"><label>Phone call script (what the voice says)</label><textarea id="tplCall"></textarea></div>
       <div class="row"><button class="btn primary" id="saveTpl">Save wording</button>
         <button class="btn" id="resetTpl">Restore default wording</button></div>
     </div>
@@ -419,6 +420,13 @@ const DAY=864e5, LS='tpp-chaser-v1';
 const REPORTS_ADDR='reports@tenantpropertyprotection.com';
 
 const DEFAULTS={
+ call:`Hi, this is Clara calling on behalf of Tenant Property Protection for {{Property}}.
+
+We haven't received your monthly coverage report yet. When you have a moment, you can email it to reports@tenantpropertyprotection.com, or reply to the email we sent.
+
+If your storage software can send it automatically each month, we're happy to help you set that up so you never have to think about it again.
+
+Thanks very much, and have a good day.`,
  subject:'Coverage report needed — {{Property}}',
  first:`Hello {{Name}},
 
@@ -641,6 +649,7 @@ function renderPms(){
 function renderSettings(){
  const s=S.settings;
  $('#tplSubject').value=s.templates.subject;$('#tplFirst').value=s.templates.first;$('#tplFollow').value=s.templates.follow;
+ $('#tplCall').value=s.templates.call;
  $('#setLate').value=s.lateDays;$('#setGap').value=s.gapDays;
  $('#setFrom').value=s.fromAddress||'';
  $('#reportsAddr').textContent=REPORTS_ADDR;
@@ -929,6 +938,7 @@ function renderLookupDetail(){
   </div>
   <div class="cactions">
    <button class="btn primary" onclick="draftFromLookup('both')">✉ Draft coverage report request</button>
+   <button class="btn" onclick="showCallScript()">📞 Call script</button>
    ${bill.e?`<button class="btn" onclick="draftFromLookup('billing')">Billing contact only</button>`:''}
    ${mgr.e?`<button class="btn" onclick="draftFromLookup('manager')">Facility manager only</button>`:''}
    <span class="hint" style="margin:0">You review and approve before anything sends.</span>
@@ -1173,6 +1183,7 @@ function renderBulk(){
    <button class="btn small" onclick="dropBulk(${i})">Remove</button></div>`}).join('')
  +`<div class="row" style="margin-top:.9rem">
     <button class="btn primary big" onclick="draftBulk()">✉ Draft all ${ok+chk} emails</button>
+    <button class="btn" onclick="downloadCallSheet()">📞 Download call sheet</button>
     <span class="hint" style="margin:0">They go to the review list — nothing sends by itself.</span>
    </div>`;
 }
@@ -1267,6 +1278,63 @@ function exportOneEml(id){
  toast('Opened as an Outlook draft — press Send there.');
 }
 
+
+/* ---------------- phone calls ---------------- */
+function phonesFor(r){
+ return [{who:'Facility manager',n:r.m||'',p:r.mp||''},{who:'Billing contact',n:r.i||'',p:r.ip||''}]
+  .filter(x=>x.p);
+}
+function callScriptFor(rec,kind){
+ const c={contact:kind==='manager'?(rec.m||''):(rec.i||''),name:rec.a||rec.f||rec.name||'',
+  property:rec.f||rec.name||rec.a||'',amount:0};
+ return fill(S.settings.templates.call||DEFAULTS.call,c);
+}
+function showCallScript(){
+ if(!lookupPick){toast('Search for a facility first.');return}
+ const r=lookupPick.rec, ph=phonesFor(r);
+ const script=callScriptFor(r,'manager');
+ const box=$('#lookupDetail');
+ const old=box.querySelector('.callbox');if(old){old.remove();return}
+ const div=document.createElement('div');
+ div.className='ccard callbox';
+ div.innerHTML=`<div class="chead"><div><b>📞 Call script</b>
+   <div class="sub">What the voice would say on this call — edit the wording in Settings.</div></div>
+   <button class="btn small x" onclick="this.closest('.callbox').remove()">✕ Close</button></div>
+  <div style="padding:.9rem 1rem">
+   <pre style="white-space:pre-wrap;font:inherit;font-size:.9rem;background:var(--surface-2);border-radius:9px;padding:.7rem .85rem;margin:0 0 .7rem">${esc(script)}</pre>
+   <div class="row">
+    ${ph.length?ph.map(x=>`<a class="btn small primary" href="tel:${esc(x.p.replace(/[^0-9+]/g,''))}">📞 Call ${esc(x.who.toLowerCase())} ${esc(x.p)}</a>`).join('')
+      :'<span class="hint" style="margin:0">No phone number on file for this facility.</span>'}
+    <button class="btn small" onclick="copyText(${JSON.stringify(script).replace(/"/g,'&quot;')})">Copy script</button>
+   </div>
+   <p class="hint" style="margin:.6rem 0 0">Automated dialling is not connected yet — these place the call through this
+    device. Use <b>Download call sheet</b> after matching a list to prepare a batch.</p>
+  </div>`;
+ box.appendChild(div);
+ div.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function csvCell(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
+function downloadCallSheet(){
+ const use=BULK.filter(b=>b.pick&&b.status!=='none');
+ if(!use.length){toast('Match a list of locations first.');return}
+ const rows=[['Facility','Corporate account','Contact type','Contact name','Phone','Email','Software','Reporting method','Call script']];
+ let n=0;
+ for(const b of use){
+  const r=b.pick.rec;
+  for(const ph of phonesFor(r)){
+   rows.push([r.f||r.name||'',r.a||'',ph.who,ph.n,ph.p,
+    ph.who==='Billing contact'?(r.ie||''):(r.me||''),r.sw||'',r.rm||'',
+    callScriptFor(r,ph.who==='Billing contact'?'billing':'manager')]);
+   n++;
+  }
+ }
+ const csv=rows.map(r=>r.map(csvCell).join(',')).join('\r\n');
+ const u=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv'}));
+ const a=document.createElement('a');a.href=u;a.download='call-sheet.csv';a.click();
+ setTimeout(()=>URL.revokeObjectURL(u),1000);
+ toast(`Call sheet downloaded — ${n} number${n===1?'':'s'} with a personalised script each.`);
+}
+
 /* ---------------- import ---------------- */
 const HEAD={name:['accountname','account','customer','customername','company','companyname','name','tenant','client'],
  property:['propertyname','property','facility','facilityname','site','sitename','location'],
@@ -1354,7 +1422,7 @@ const dz=$('#dropzone');
 ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));
 dz.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f)handleFile(f)});
 $('#copyAddr').onclick=()=>copyText(REPORTS_ADDR);
-$('#saveTpl').onclick=()=>{S.settings.templates={subject:$('#tplSubject').value,first:$('#tplFirst').value,follow:$('#tplFollow').value};
+$('#saveTpl').onclick=()=>{S.settings.templates={subject:$('#tplSubject').value,first:$('#tplFirst').value,follow:$('#tplFollow').value,call:$('#tplCall').value};
  save();toast('Wording saved — new drafts will use it.')};
 $('#resetTpl').onclick=()=>{S.settings.templates={...DEFAULTS};renderSettings();save();toast('Default wording restored.')};
 $('#saveRules').onclick=()=>{S.settings.lateDays=Math.max(1,+$('#setLate').value||35);
