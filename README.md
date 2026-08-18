@@ -1,58 +1,47 @@
-# TPP Automation Center — Coverage Reports & Collections
+# Coverage Report Chaser — Tenant Property Protection
 
 **Live app: <https://teond1090.github.io/tpp-automation-center/>**
 
-Automated system for Tenant Property Protection that manages two workflows end to end:
+A simple tool for chasing the handful of customers who are late with their monthly
+coverage report. Track them, let the app write the request emails, and approve each one
+before it goes anywhere.
 
-1. **Missing Coverage Report Collection** — identify customers who haven't submitted their
-   monthly coverage report, contact them automatically, guide them to submission options
-   (email to reports@tenantpropertyprotection.com or automated delivery from their property
-   management software), and follow up until the report is received.
-2. **Past Due Account Collections** — identify customers with outstanding balances, send
-   reminders, notices and escalations automatically, and track responses and payment status.
+**Nothing is ever sent automatically.** Every email waits for an explicit approval, and
+approving opens the message in your own email program so you press Send yourself.
 
-## Running it
+## How it works
 
-Use the live link above (deployed automatically from `main` by GitHub Actions), or open
-`index.html` directly in a browser — it is fully self-contained. All data stays in the
-browser (localStorage); nothing is sent anywhere.
+1. **Add your customers** — type in the few who are usually late, or import a CSV/Excel
+   list you already have (drag and drop; your column names just need a name and an email).
+2. **Press "Check who's late"** — the app finds anyone past the threshold (35 days by
+   default) and writes a personalized request email for each.
+3. **Review and approve** — read each draft, edit the wording if you like, then approve.
+   Approving opens it in your email program; mark it sent when you've sent it.
+4. **Mark "Got their report"** when it arrives, and that customer goes quiet until next
+   month.
 
-Quick tour:
+Follow-ups use different wording than the first request, and the app waits a configurable
+number of days (7 by default) before drafting another one for the same customer.
 
-1. **Accounts** tab → *Load sample data* (or upload/paste your own CSV/Excel list).
-2. Press **⚙ Run automation** — flagged accounts get personalized outreach drafted.
-3. **Outbox** → review and **approve** each draft (nothing is ever sent without approval),
-   then send; use **+1 day** to watch the Day 3 / 7 / 14 / 21 follow-up sequence and
-   Day-21 escalations play out.
-4. **Inbox** → simulate customer replies; the AI classifier updates statuses, creates
-   dispute tickets and internal tasks automatically.
-5. **Dashboard**, **AI Insights** and **Audit Log** show metrics, recommendations,
-   compliance scores and the full activity trail.
+## Other things it does
 
-## Features
+- Editable email wording with `{{Name}}`, `{{Property}}` and `{{Amount}}` placeholders
+- Adjustable "late after N days" and "wait N days between follow-ups" settings
+- Step-by-step guides for having SiteLink, storEDGE, Cubby, Easy Storage Solutions,
+  Storage Commander or any other software email reports automatically each month — the
+  permanent fix for a chronic late reporter
+- Backup / restore, so you can move your list to another computer
 
-- **Approval workflow** — every draft waits for explicit (Admin) approval before it can be
-  sent, opened in a mail app, or printed; toggleable in Settings, on by default
-- CSV / Excel / pasted-list import with tolerant column matching
-- Automatic classification: Missing Coverage Report, Past Due, Priority Follow-Up Queue
-- Personalized outreach emails from editable templates, plus editable SMS reminder
-  templates and printable letters on TPP letterhead
-- Dashboard action center ("What needs your attention") and guided first-run setup
-- Day 3 / 7 / 14 / 21 automated follow-up sequence with internal escalation tasks
-- AI reply classification (report submitted, payment sent, dispute, wrong contact,
-  out-of-office, assistance, general) driving automatic status transitions
-- Simulated monitoring of reports@ / collections@ mailboxes with attachment matching
-- SiteLink / storEDGE / Cubby / Easy Storage Solutions / Storage Commander / generic PMS
-  onboarding guides with one-click guide emails
-- Dashboard: coverage, collections aging, outreach and automation metric groups
-- AI recommendations and a 0–100 Customer Compliance Score
-- Role-based permissions (Admin / Customer Success / Accounting / Operations / Viewer)
-- Configurable rules, cadence and templates; audit log with CSV export; workspace
-  export/import
+## Your data
 
-## Production build
+Everything is stored in your own browser (localStorage) — nothing is uploaded anywhere,
+and each person who opens the link has their own separate list. Use **Download backup**
+in Settings to save or transfer it.
 
-The page doubles as a working spec. [`ARCHITECTURE.md`](ARCHITECTURE.md) documents the
-event-driven production architecture it mirrors: ingestion API with inbound-email
-webhooks, event bus, durable follow-up sequencer, AI reply/insight services, task
-service, analytics and append-only audit logging.
+## Advanced version
+
+The full automation platform — collections and past-due workflows, aging reports, AI reply
+classification, dispute tickets, compliance scores, role-based permissions and an audit log
+— is still here at [`advanced.html`](advanced.html), linked from the bottom of the simple
+app. [`ARCHITECTURE.md`](ARCHITECTURE.md) documents the event-driven production design that
+version mirrors.
