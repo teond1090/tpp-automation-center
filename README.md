@@ -46,13 +46,22 @@ classification, dispute tickets, compliance scores, role-based permissions and a
 app. [`ARCHITECTURE.md`](ARCHITECTURE.md) documents the event-driven production design that
 version mirrors.
 
+## Look up a facility
+
+The first thing on the page is a search box. Type a facility name (or a corporate account
+name) and a contact card appears showing **both** contacts side by side — billing contact
+and facility manager, each with name, email and phone — plus the location, storage software
+and reporting method. Copy either address, or add either one to the chase list in one click.
+Facilities that already report by API or automated email are flagged as such, since they
+normally need no chasing at all.
+
+The same lookup runs inside **Add customer**, so typing a name there fills in the contact,
+email, phone, property and software for you.
+
 ## Company directory (auto-fill contacts)
 
 Under **Settings → Company directory**, load the master client list (`.xlsx`, `.csv`, or a
-`directory.json`). After that, typing a corporate account or facility name when adding a
-customer fills in the billing contact, facility manager, email, phone and storage software
-automatically, and you can switch a customer between the billing contact and the facility
-manager with one click.
+`directory.json`) once — that is what powers the lookup above.
 
 Two things worth knowing:
 

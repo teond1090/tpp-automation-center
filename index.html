@@ -122,6 +122,30 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .dirhint{font-size:.78rem;color:var(--muted);margin:.25rem 0 0}
 .dirhint.good{color:var(--good-text)}
 .dirhint.warn{color:#8f5a00}
+.bigsearch{font-size:1.05rem;padding:.8rem .95rem}
+.lookup h2{margin-bottom:.35rem}
+.ccard{border:1px solid var(--grid);border-radius:13px;margin-top:.9rem;overflow:hidden;background:var(--surface)}
+.ccard .chead{display:flex;gap:.7rem;align-items:flex-start;padding:.85rem 1rem;background:var(--accent-soft);
+ border-bottom:1px solid var(--grid);flex-wrap:wrap}
+.ccard .chead b{font-size:1.05rem;display:block}
+.ccard .chead .sub{font-size:.85rem;color:var(--ink-2);margin-top:.1rem}
+.ccard .chead .x{margin-left:auto}
+.cgrid{display:grid;grid-template-columns:1fr 1fr;gap:0}
+@media (max-width:700px){.cgrid{grid-template-columns:1fr}}
+.cbox{padding:.9rem 1rem;border-right:1px solid var(--grid)}
+.cbox:last-child{border-right:0}
+@media (max-width:700px){.cbox{border-right:0;border-bottom:1px solid var(--grid)}}
+.clab{font-size:.7rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:.3rem}
+.cbox .cname{font-weight:700;font-size:.98rem}
+.cbox .cline{font-size:.9rem;margin:.15rem 0;word-break:break-all}
+.cbox .cline a{text-decoration:none}
+.cbox .none{color:var(--muted);font-size:.9rem;font-style:italic}
+.cbox .row{margin-top:.55rem}
+.cmeta{padding:.6rem 1rem;border-top:1px solid var(--grid);font-size:.84rem;color:var(--ink-2);
+ display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.cmeta .pill{background:var(--surface-2);border-radius:99px;padding:.1rem .55rem;font-size:.78rem;font-weight:600}
+.cmeta .pill.auto{background:var(--good-soft);color:var(--good-text)}
+.tracked{background:var(--good-soft);color:var(--good-text);border-radius:8px;padding:.4rem .7rem;font-size:.86rem;font-weight:600}
 .srcrow{margin-top:.35rem;align-items:center;gap:.35rem}
 .srcrow .btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .dirstat{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;font-size:.86rem;margin-bottom:.5rem}
@@ -155,6 +179,18 @@ details.help li{margin-bottom:.3rem}
 </header>
 
 <main>
+
+<!-- FACILITY LOOKUP -->
+<div class="card lookup" id="lookupCard">
+  <h2>🔍 Look up a facility</h2>
+  <p class="hint" id="lookupHint"></p>
+  <div class="dirwrap">
+    <input id="lookup" class="bigsearch" autocomplete="off"
+      placeholder="Type a facility or corporate account name…">
+    <div id="lookupResults" class="dirlist" hidden></div>
+  </div>
+  <div id="lookupDetail"></div>
+</div>
 
 <div id="banner"></div>
 
@@ -543,7 +579,7 @@ function renderSettings(){
  $('#setLate').value=s.lateDays;$('#setGap').value=s.gapDays;
  $('#reportsAddr').textContent=REPORTS_ADDR;
 }
-function render(){renderBanner();renderReview();renderCustomers()}
+function render(){renderBanner();renderReview();renderCustomers();if(typeof lookupPick!=='undefined'&&lookupPick)renderLookupDetail()}
 
 /* ---------------- add / edit customer ---------------- */
 let editing=null;
@@ -648,7 +684,7 @@ function setDirectory(facilities,source){
  DIRECTORY={source,at:new Date().toISOString(),facilities};
  try{localStorage.setItem(DIR_LS,JSON.stringify(DIRECTORY))}
  catch(e){toast('That list is too large for this browser to store.');DIRECTORY=null;return}
- buildDirIndex();renderDirStat();
+ buildDirIndex();renderDirStat();renderLookupHint();
  toast(`Directory loaded — ${DIR_IDX.facilities.length} facilities, ${DIR_IDX.accounts.length} corporate accounts.`);
 }
 function loadDirFile(file){
@@ -758,6 +794,80 @@ function autoLoadDirectory(){
  fetch('directory.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{
   if(!d)return;setDirectory(d.facilities||d,'directory.json');
  }).catch(()=>{});
+}
+
+/* ---------------- facility lookup (front page) ---------------- */
+let lookupPick=null;
+function contactBlock(label,ct,rec,which){
+ if(!ct.e) return `<div class="cbox"><div class="clab">${label}</div>
+   <p class="none">No ${label.toLowerCase()} on file for this record.</p></div>`;
+ const tracked=S.customers.some(c=>(c.email||'').toLowerCase()===ct.e.toLowerCase());
+ return `<div class="cbox"><div class="clab">${label}</div>
+  ${ct.n?`<div class="cname">${esc(ct.n)}</div>`:''}
+  <div class="cline"><a href="mailto:${esc(ct.e)}">${esc(ct.e)}</a></div>
+  ${ct.p?`<div class="cline">${esc(ct.p)}</div>`:''}
+  <div class="row">
+   <button class="btn small" onclick="copyText('${esc(ct.e)}')">Copy email</button>
+   ${tracked?'<span class="tracked">✓ In your chase list</span>'
+    :`<button class="btn small primary" onclick="addFromLookup('${which}')">+ Add to chase list</button>`}
+  </div></div>`;
+}
+function renderLookupDetail(){
+ const box=$('#lookupDetail');
+ if(!lookupPick){box.innerHTML='';return}
+ const p=lookupPick,r=p.rec,isAcct=p.kind==='account';
+ const bill={n:r.i||'',e:r.ie||'',p:r.ip||''};
+ const mgr=isAcct?{n:'',e:'',p:''}:{n:r.m||'',e:r.me||'',p:r.mp||''};
+ const title=isAcct?r.name:(r.f||r.a);
+ const subBits=isAcct?[`${r.count} facilit${r.count>1?'ies':'y'}`]
+  :[r.a&&r.a!==r.f?r.a:'',[r.c,r.s].filter(Boolean).join(', ')].filter(Boolean);
+ const rm=(r.rm||'').toLowerCase(),auto=/api|automated/.test(rm);
+ const meta=[r.sw?`<span class="pill">${esc(r.sw)}</span>`:'',
+  r.rm?`<span class="pill ${auto?'auto':''}">Reports by ${esc(r.rm)}</span>`:'',
+  r.st?`<span class="pill">${esc(r.st)}</span>`:''].filter(Boolean).join('');
+ box.innerHTML=`<div class="ccard">
+  <div class="chead"><div><b>${esc(title)}</b>
+    ${subBits.length?`<div class="sub">${esc(subBits.join(' · '))}</div>`:''}</div>
+   <button class="btn small x" onclick="clearLookup()">✕ Close</button></div>
+  <div class="cgrid">
+   ${contactBlock('Billing contact',bill,r,'billing')}
+   ${contactBlock(isAcct?'Facility manager':'Facility manager',mgr,r,'manager')}
+  </div>
+  ${meta?`<div class="cmeta">${meta}${auto?'<span class="hint" style="margin:0">— already automated, may not need chasing</span>':''}</div>`:''}
+ </div>`;
+}
+function clearLookup(){lookupPick=null;$('#lookup').value='';hideLookupResults();renderLookupDetail()}
+function hideLookupResults(){const b=$('#lookupResults');b.hidden=true;b.innerHTML=''}
+function showLookupResults(items){
+ const box=$('#lookupResults');
+ if(!items.length){hideLookupResults();return}
+ box.innerHTML=items.map((it,i)=>`<button type="button" data-i="${i}">
+  <span class="nm">${esc(it.name)}<span class="kind">${it.kind==='account'?'account':'facility'}</span></span>
+  <span class="mt">${esc(it.meta||'')}</span></button>`).join('');
+ box._items=items;box.hidden=false;
+}
+function addFromLookup(which){
+ if(!lookupPick)return;
+ const r=lookupPick.rec,isAcct=lookupPick.kind==='account';
+ const ct=which==='manager'?{n:r.m||'',e:r.me||'',p:r.mp||''}:{n:r.i||'',e:r.ie||'',p:r.ip||''};
+ if(!ct.e){toast('No email on file for that contact.');return}
+ const name=isAcct?r.name:(r.a||r.f||'');
+ const property=isAcct?'':(r.f||'');
+ const dupe=S.customers.find(c=>(c.email||'').toLowerCase()===ct.e.toLowerCase()
+   &&(c.property||'').toLowerCase()===property.toLowerCase());
+ if(dupe){toast(`${dupe.name} is already in your chase list.`);return}
+ S.customers.push({id:uid(),name:name||ct.n||ct.e,email:ct.e.toLowerCase(),contact:ct.n,
+  property,phone:ct.p,lastReport:null,amount:0,pms:r.sw||'',timesAsked:0});
+ save();render();renderLookupDetail();
+ toast(`${name||ct.n} added to your chase list (${which==='manager'?'facility manager':'billing contact'}).`);
+}
+function renderLookupHint(){
+ const el=$('#lookupHint');if(!el)return;
+ el.innerHTML=DIRECTORY&&DIR_IDX.facilities.length
+  ? `Type any facility or corporate account name — the billing contact and facility manager appear instantly. `
+    +`<b>${DIR_IDX.facilities.length}</b> facilities loaded.`
+  : `Load your master client list once under <b>Settings &rarr; Company directory</b> and every facility becomes searchable here.`;
+ $('#lookup').disabled=!(DIRECTORY&&DIR_IDX.facilities.length);
 }
 
 /* ---------------- import ---------------- */
@@ -898,8 +1008,33 @@ $('#srcRow').addEventListener('click',e=>{
 $('#dirFile').onchange=e=>{if(e.target.files[0])loadDirFile(e.target.files[0]);e.target.value=''};
 $('#dirClear').onclick=()=>{
  if(!confirm('Remove the loaded directory from this browser? Your customers are not affected.'))return;
- DIRECTORY=null;localStorage.removeItem(DIR_LS);buildDirIndex();renderDirStat();toast('Directory removed.')};
+ DIRECTORY=null;localStorage.removeItem(DIR_LS);buildDirIndex();renderDirStat();clearLookup();renderLookupHint();toast('Directory removed.')};
 buildDirIndex();renderDirStat();autoLoadDirectory();
+
+/* lookup wiring */
+$('#lookup').addEventListener('input',e=>{
+ if(!DIRECTORY){hideLookupResults();return}
+ showLookupResults(dirSearch(e.target.value));
+});
+$('#lookup').addEventListener('keydown',e=>{
+ const box=$('#lookupResults');if(box.hidden)return;
+ const btns=[...box.querySelectorAll('button')];if(!btns.length)return;
+ let i=btns.findIndex(b=>b.classList.contains('on'));
+ if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();
+  i=e.key==='ArrowDown'?Math.min(i+1,btns.length-1):Math.max(i-1,0);
+  btns.forEach(b=>b.classList.remove('on'));btns[i].classList.add('on');btns[i].scrollIntoView({block:'nearest'});}
+ else if(e.key==='Enter'){e.preventDefault();(i>=0?btns[i]:btns[0]).click()}
+ else if(e.key==='Escape'){hideLookupResults()}
+});
+$('#lookupResults').addEventListener('click',e=>{
+ const b=e.target.closest('button');if(!b)return;
+ const it=($('#lookupResults')._items||[])[+b.dataset.i];
+ if(!it)return;
+ lookupPick=it;$('#lookup').value=it.name;hideLookupResults();renderLookupDetail();
+});
+document.addEventListener('click',e=>{if(!e.target.closest('#lookupCard'))hideLookupResults()});
+renderLookupHint();
+
 
 /* boot */
 renderSettings();renderPms();render();save();
