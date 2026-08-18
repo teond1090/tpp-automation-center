@@ -127,6 +127,8 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .dirhint.warn{color:#8f5a00}
 .bigsearch{font-size:1.05rem;padding:.8rem .95rem}
 #bulkInput{min-height:130px;font-size:.95rem}
+.onebar{display:flex;gap:.7rem;align-items:center;flex-wrap:wrap;padding:.6rem .9rem;margin-bottom:.7rem;
+ background:var(--accent-soft);border-radius:10px;font-size:.9rem}
 .bmatch{display:flex;gap:.6rem;align-items:center;padding:.5rem 0;border-bottom:1px solid var(--grid);font-size:.88rem;flex-wrap:wrap}
 .bmatch:last-child{border-bottom:0}
 .bmatch .bi{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;flex:none;font-size:.85rem}
@@ -189,7 +191,7 @@ details.help li{margin-bottom:.3rem}
     <div class="logo"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3z" fill="#fff" opacity=".92"/><path d="M8.2 12.3l2.6 2.6 5-5.2" stroke="#1c5cab" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <div class="brand">
       <h1>Coverage Report Chaser</h1>
-      <div class="sub">Tenant Property Protection <span class="ver">v10 · Aug 18</span></div>
+      <div class="sub">Tenant Property Protection <span class="ver">v11 · Aug 18</span></div>
     </div>
     <div class="right">
       <button class="btn" id="addBtn">+ Add customer</button>
@@ -246,11 +248,12 @@ details.help li{margin-bottom:.3rem}
   <div class="row spread">
     <div>
       <h2>Emails waiting for your approval</h2>
-      <p class="hint">Nothing is ever sent automatically. Read each one, then approve it — approving opens it in your
-        email program so you press Send yourself.</p>
+      <p class="hint">Nothing is ever sent automatically. <b>Send one at a time</b> walks the queue a single message at
+        a time through Outlook — the safest way to work a list without tripping Outlook's bulk-sending limits.</p>
     </div>
     <div class="row">
-      <button class="btn primary" id="exportOutlook">📥 Save all to Outlook</button>
+      <button class="btn primary" id="oneMode">Send one at a time</button>
+      <button class="btn" id="exportOutlook">📥 Save all to Outlook</button>
       <button class="btn" id="approveAll">✓ Approve all</button>
     </div>
   </div>
@@ -603,6 +606,10 @@ function renderBanner(){
 function renderReview(){
  const list=S.drafts.filter(d=>!d.sentAt);
  $('#reviewCard').style.display=list.length?'':'none';
+ $('#oneMode').textContent=ONEMODE?'Show whole list':'Send one at a time';
+ $('#oneMode').classList.toggle('primary',!ONEMODE);
+ if(ONEMODE){$('#approveAll').style.display='none';$('#exportOutlook').style.display='none';renderOneAtATime();return}
+ $('#exportOutlook').style.display='';
  $('#approveAll').style.display=list.some(d=>!d.approvedAt)?'':'none';
  $('#reviewList').innerHTML=list.map(d=>{const c=byId(d.custId);const ap=!!d.approvedAt;
   return `<div class="draft ${ap?'approved':'awaiting'}">
@@ -937,7 +944,8 @@ function renderLookupDetail(){
    ${contactBlock(isAcct?'Facility manager':'Facility manager',mgr,r,'manager')}
   </div>
   <div class="cactions">
-   <button class="btn primary" onclick="draftFromLookup('both')">✉ Draft coverage report request</button>
+   <button class="btn primary" onclick="draftFromLookup('both',true)">✉ Send this email now</button>
+   <button class="btn" onclick="draftFromLookup('both')">Add to review list</button>
    <button class="btn" onclick="showCallScript()">📞 Call script</button>
    ${bill.e?`<button class="btn" onclick="draftFromLookup('billing')">Billing contact only</button>`:''}
    ${mgr.e?`<button class="btn" onclick="draftFromLookup('manager')">Facility manager only</button>`:''}
@@ -971,7 +979,7 @@ function addFromLookup(which){
  save();render();renderLookupDetail();
  toast(`${name||ct.n} added to your chase list (${which==='manager'?'facility manager':'billing contact'}).`);
 }
-function draftFromLookup(which){
+function draftFromLookup(which,sendNow){
  if(!lookupPick){toast('Search for a facility first.');return}
  const r=lookupPick.rec,isAcct=lookupPick.kind==='account';
  const bill={role:'billing',name:r.i||'',email:(r.ie||'').toLowerCase(),phone:r.ip||''};
@@ -998,8 +1006,15 @@ function draftFromLookup(which){
   (picked.length>1?'facility manager + billing':picked[0].role==='billing'?'billing contact':'facility manager');
  S.drafts.unshift(d);
  save();render();
+ if(sendNow){
+  d.approvedAt=new Date().toISOString();save();render();
+  window.location.href=mailtoHref(d);
+  toast('Opening Outlook with this one email — press Send there.');
+  return d;
+ }
  $('#reviewCard').scrollIntoView({behavior:'smooth',block:'start'});
  toast('Draft ready — review it below. Nothing is sent until you approve it.');
+ return d;
 }
 function renderLookupHint(){
  const el=$('#lookupHint');if(!el)return;
@@ -1335,6 +1350,53 @@ function downloadCallSheet(){
  toast(`Call sheet downloaded — ${n} number${n===1?'':'s'} with a personalised script each.`);
 }
 
+
+/* ---------------- send one at a time ----------------
+   Outlook throttles bursts, so the queue is worked one message at a time
+   through the normal mail client rather than sent in a batch.          */
+let ONEMODE=false;
+function toggleOneAtATime(){ONEMODE=!ONEMODE;render();
+ if(ONEMODE)$('#reviewCard').scrollIntoView({behavior:'smooth',block:'start'})}
+function nextUnsent(){return S.drafts.filter(d=>!d.sentAt)[0]||null}
+function sendThisOne(id){
+ const d=S.drafts.find(x=>x.id===id);if(!d||d.sentAt)return;
+ if(!d.approvedAt)d.approvedAt=new Date().toISOString();
+ save();
+ window.location.href=mailtoHref(d);
+ toast('Outlook is opening with this one email — press Send, then mark it sent.');
+ render();
+}
+function renderOneAtATime(){
+ const box=$('#reviewList');
+ const queue=S.drafts.filter(d=>!d.sentAt);
+ const d=queue[0];
+ const doneToday=S.drafts.filter(x=>x.sentAt&&String(x.sentAt).slice(0,10)===iso(today())).length;
+ if(!d){
+  box.innerHTML=`<div class="banner ok"><span class="big-ic">✅</span><div>
+   <b>Nothing left in the queue</b>
+   <span class="hint">${doneToday?doneToday+' sent today.':'Search a facility above to send another.'}</span></div></div>`;
+  return;
+ }
+ const c=byId(d.custId);
+ box.innerHTML=`<div class="onebar">
+   <b>${queue.length} left to send</b>
+   <span class="hint" style="margin:0">${doneToday} sent today · one at a time keeps Outlook happy</span>
+   <button class="btn small" style="margin-left:auto" onclick="toggleOneAtATime()">Show the whole list</button>
+  </div>
+  <div class="draft ${d.approvedAt?'approved':'awaiting'}">
+   <div class="dh"><span class="dsub">${esc(d.subject)}</span>
+    <span class="dto">to ${esc(d.to)}${c?` · ${esc(c.name)}`:''}</span>
+    <span class="stamp" style="margin-left:auto">${esc(d.kind)}</span></div>
+   <pre>${esc(d.body)}</pre>
+   <div class="row">
+    <button class="btn primary big" onclick="sendThisOne('${d.id}')">✉ Open in Outlook &amp; send</button>
+    <button class="btn" onclick="markSent('${d.id}')">✓ Sent — next</button>
+    <button class="btn small" onclick="editDraft('${d.id}')">✎ Edit wording</button>
+    <button class="btn small" onclick="exportOneEml('${d.id}')">📥 Outlook draft</button>
+    <button class="btn small danger" onclick="discard('${d.id}')">Skip this one</button>
+   </div></div>`;
+}
+
 /* ---------------- import ---------------- */
 const HEAD={name:['accountname','account','customer','customername','company','companyname','name','tenant','client'],
  property:['propertyname','property','facility','facilityname','site','sitename','location'],
@@ -1518,6 +1580,7 @@ $('#bulkToggle').onclick=()=>{const b=$('#bulkBody');const on=b.style.display===
 $('#bulkMatch').onclick=runBulkMatch;
 $('#bulkClear').onclick=()=>{$('#bulkInput').value='';BULK=[];renderBulk()};
 $('#exportOutlook').onclick=()=>exportOutlookDrafts();
+$('#oneMode').onclick=toggleOneAtATime;
 
 
 

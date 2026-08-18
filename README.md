@@ -75,7 +75,21 @@ the directory and you get a summary: matched, needs-a-quick-check (with a dropdo
 the right one), and not-found. Then **Draft all** writes every email in one go, each
 addressed to the facility manager and the billing contact.
 
-To get them into Outlook, press **📥 Save all to Outlook** in the review list. That
+### Sending one at a time (recommended)
+
+Outlook throttles bursts of mail, so the default way to work a list is **Send one at a
+time**: the review list collapses to a single message with a counter ("11 left to send · 1
+sent today"). Press **✉ Open in Outlook & send**, send it in Outlook, then **✓ Sent — next**
+moves to the following one. Nothing is ever sent by the app, and only the message you are
+working on is touched.
+
+For a single facility you do not need the queue at all — search it and press
+**✉ Send this email now** on the card. Outlook opens with that one message, addressed and
+written, ready for you to send.
+
+### Preparing a batch as drafts
+
+If you would rather stage everything first, press **📥 Save all to Outlook** in the review list. That
 downloads `outlook-drafts.zip` containing one `.eml` per location. Unzip it and either:
 
 - **drag the files into your Outlook Drafts folder** — they appear as drafts, ready to send; or
@@ -87,7 +101,8 @@ chase* so the From line matches the account you send from. Individual drafts als
 their own **📥 Outlook draft** button.
 
 This never sends anything — it hands Outlook a stack of prepared messages and you press
-Send on each.
+Send on each. Bear in mind that sending a large stack back-to-back is exactly what
+Outlook's bulk limits look for; the one-at-a-time queue above avoids that.
 
 ## Phone calls
 
