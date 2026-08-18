@@ -1,0 +1,7 @@
+# Never publish customer data to this public site.
+# The company directory is loaded in the browser and stays on the user's machine.
+directory.json
+*client*list*.xlsx
+*client*list*.xls
+*client*list*.csv
+*Full_Client_List*

@@ -45,3 +45,27 @@ classification, dispute tickets, compliance scores, role-based permissions and a
 — is still here at [`advanced.html`](advanced.html), linked from the bottom of the simple
 app. [`ARCHITECTURE.md`](ARCHITECTURE.md) documents the event-driven production design that
 version mirrors.
+
+## Company directory (auto-fill contacts)
+
+Under **Settings → Company directory**, load the master client list (`.xlsx`, `.csv`, or a
+`directory.json`). After that, typing a corporate account or facility name when adding a
+customer fills in the billing contact, facility manager, email, phone and storage software
+automatically, and you can switch a customer between the billing contact and the facility
+manager with one click.
+
+Two things worth knowing:
+
+- **The directory never leaves the browser.** It is stored in local storage on the machine
+  that loaded it — it is not uploaded, and it is deliberately **not** part of this public
+  site. Each person loads their own copy; re-load the file whenever the master list changes.
+- **Logins are ignored on purpose.** Any sheet containing username/password columns is
+  skipped during import, so software credentials in the master workbook never enter the app.
+
+`.gitignore` blocks client lists and `directory.json` from being committed, so customer
+contact data cannot be published by accident. If you ever want the directory to load
+automatically with no manual step, that requires hosting the site privately — ask before
+placing a `directory.json` next to `index.html`, because anything in this repo is public.
+
+The Excel reader (SheetJS) is vendored in `vendor/` rather than loaded from a CDN, so
+imports keep working offline and behind restrictive networks.

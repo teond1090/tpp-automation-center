@@ -6,7 +6,7 @@
 <title>Coverage Report Chaser &middot; Tenant Property Protection</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231c5cab'/%3E%3Cpath d='M14 40 26 28l8 8 16-16' stroke='%23fff' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script defer src="vendor/xlsx.full.min.js"></script>
 <style>
 :root{
   color-scheme:light;
@@ -108,6 +108,25 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .dlg h3{margin-top:0}
 .f{margin-bottom:.7rem}
 .f label{display:block;font-size:.8rem;font-weight:700;color:var(--ink-2);margin-bottom:.2rem}
+.dirwrap{position:relative}
+.dirlist{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--surface);border:1px solid var(--axis);
+ border-radius:10px;box-shadow:0 8px 26px rgba(0,0,0,.18);max-height:270px;overflow-y:auto;margin-top:.2rem}
+.dirlist button{display:block;width:100%;text-align:left;border:0;background:none;padding:.5rem .65rem;
+ border-bottom:1px solid var(--grid);font:inherit;color:var(--ink);cursor:pointer}
+.dirlist button:last-child{border-bottom:0}
+.dirlist button:hover,.dirlist button.on{background:var(--accent-soft)}
+.dirlist .nm{font-weight:700;font-size:.88rem}
+.dirlist .mt{font-size:.76rem;color:var(--muted);display:block;margin-top:.05rem}
+.dirlist .kind{font-size:.66rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--accent-dk);
+ background:var(--accent-soft);border-radius:99px;padding:.05rem .4rem;margin-left:.35rem}
+.dirhint{font-size:.78rem;color:var(--muted);margin:.25rem 0 0}
+.dirhint.good{color:var(--good-text)}
+.dirhint.warn{color:#8f5a00}
+.srcrow{margin-top:.35rem;align-items:center;gap:.35rem}
+.srcrow .btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.dirstat{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;font-size:.86rem;margin-bottom:.5rem}
+.dirstat .dot{width:.6rem;height:.6rem;border-radius:50%;background:var(--critical);flex:none}
+.dirstat.on .dot{background:var(--good)}
 #toast{position:fixed;bottom:1.2rem;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--page);padding:.7rem 1.1rem;border-radius:11px;font-weight:600;opacity:0;pointer-events:none;transition:all .25s;z-index:99;max-width:92vw;text-align:center}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .empty{color:var(--muted);text-align:center;padding:1.2rem}
@@ -228,6 +247,22 @@ details.help li{margin-bottom:.3rem}
     </div>
   </details>
 
+  <details class="help" id="dirCard">
+    <summary>📇 Company directory — auto-fill contacts</summary>
+    <div class="b">
+      <div class="dirstat" id="dirStat"><span class="dot"></span><span id="dirStatTx"></span></div>
+      <p class="hint">Load your master client list once and the app fills in the billing contact, facility manager,
+        email, phone and software for you — just start typing an account or facility name when you add a customer.</p>
+      <div class="row">
+        <label class="btn primary"><input type="file" id="dirFile" accept=".xlsx,.xls,.csv,.json" hidden>Load master list…</label>
+        <button class="btn" id="dirClear">Remove directory</button>
+      </div>
+      <p class="hint" style="margin-top:.5rem">The directory is stored <b>only in this browser</b> — it is never uploaded
+        and is not part of the website. Anyone else who uses this tool loads their own copy the same way.
+        Re-load the file whenever your master list changes.</p>
+    </div>
+  </details>
+
   <details class="help">
     <summary>💾 Your data / backup</summary>
     <div class="b">
@@ -250,10 +285,19 @@ details.help li{margin-bottom:.3rem}
 <!-- add/edit customer -->
 <dialog id="custDlg"><form method="dialog" class="dlg">
   <h3 id="dlgTitle">Add customer</h3>
-  <div class="f"><label>Customer / company name *</label><input id="fName" required></div>
-  <div class="f"><label>Email address *</label><input id="fEmail" type="email" required></div>
+  <div class="f dirwrap"><label>Corporate account or facility name *</label>
+    <input id="fName" required autocomplete="off" placeholder="Start typing the account or facility name…">
+    <div id="dirResults" class="dirlist" hidden></div>
+    <p class="dirhint" id="dirHint"></p></div>
+  <div class="f"><label>Email address *</label><input id="fEmail" type="email" required>
+    <div class="row srcrow" id="srcRow" hidden>
+      <span class="hint">Use:</span>
+      <button type="button" class="btn small" data-src="billing">Billing contact</button>
+      <button type="button" class="btn small" data-src="manager">Facility manager</button>
+    </div></div>
   <div class="f"><label>Contact person</label><input id="fContact"></div>
   <div class="f"><label>Property name</label><input id="fProperty"></div>
+  <div class="f"><label>Phone (optional)</label><input id="fPhone"></div>
   <div class="f"><label>Last report received</label><input id="fLast" type="date"></div>
   <div class="f"><label>Past due amount (optional)</label><input id="fAmount" type="number" step="0.01" min="0"></div>
   <div class="f"><label>Storage software (optional)</label><input id="fPms" list="pmsOpts" placeholder="SiteLink, storEDGE, Cubby…">
@@ -479,7 +523,7 @@ function renderCustomers(){
  $('#custList').innerHTML=n?list.map(c=>{const st=statusOf(c);
   return `<div class="cust">
    <div class="who"><b>${esc(c.name)}</b> <span class="tag ${st.cls}">${esc(st.label)}</span>
-    <div class="sub">${esc(c.email||'no email')}${c.property?' · '+esc(c.property):''} · last report ${fmtDate(c.lastReport)}${(+c.amount||0)?' · '+fmt$(c.amount)+' past due':''}</div></div>
+    <div class="sub">${esc(c.email||'no email')}${c.phone?' · '+esc(c.phone):''}${c.property?' · '+esc(c.property):''} · last report ${fmtDate(c.lastReport)}${(+c.amount||0)?' · '+fmt$(c.amount)+' past due':''}</div></div>
    <div class="acts">
     ${st.key!=='ok'?`<button class="btn small primary" onclick="gotReport('${c.id}')">✓ Got their report</button>`:''}
     <button class="btn small" onclick="openCust('${c.id}')">Edit</button>
@@ -504,12 +548,17 @@ function render(){renderBanner();renderReview();renderCustomers()}
 /* ---------------- add / edit customer ---------------- */
 let editing=null;
 function openCust(id){
- editing=id||null;const c=id?byId(id):null;
+ editing=id||null;const c=id?byId(id):null;dirPick=null;
  $('#dlgTitle').textContent=c?'Edit customer':'Add customer';
  $('#fName').value=c?.name||'';$('#fEmail').value=c?.email||'';$('#fContact').value=c?.contact||'';
  $('#fProperty').value=c?.property||'';$('#fLast').value=c?.lastReport||'';
  $('#fAmount').value=(+c?.amount||0)||'';$('#fPms').value=c?.pms||'';
+ $('#fPhone').value=c?.phone||'';
  $('#delBtn').style.display=c?'':'none';
+ hideDirResults();$('#srcRow').hidden=true;
+ const h=$('#dirHint');h.className='dirhint';
+ h.textContent=DIRECTORY?'Start typing — matches from your company directory appear as you type.'
+  :'Tip: load your master client list under Settings → Company directory and these fields fill themselves.';
  $('#custDlg').showModal();
 }
 $('#custDlg').addEventListener('close',()=>{
@@ -521,11 +570,195 @@ $('#custDlg').addEventListener('close',()=>{
  const name=$('#fName').value.trim(),email=$('#fEmail').value.trim().toLowerCase();
  if(!name||!email){toast('A name and an email address are required.');editing=null;return}
  const rec={name,email,contact:$('#fContact').value.trim(),property:$('#fProperty').value.trim(),
+  phone:$('#fPhone').value.trim(),
   lastReport:$('#fLast').value||null,amount:parseFloat($('#fAmount').value)||0,pms:$('#fPms').value.trim()};
  if(editing){Object.assign(byId(editing),rec);toast('Customer updated.')}
  else{S.customers.push({id:uid(),...rec,timesAsked:0});toast(`${name} added.`)}
  editing=null;save();render();
 });
+
+/* ---------------- company directory (auto-fill contacts) ----------------
+   Loaded from the master client list. Stored ONLY in this browser under a
+   separate key; never uploaded and never part of the published site.      */
+const DIR_LS='tpp-directory-v1';
+let DIRECTORY=null, DIR_IDX={accounts:[],facilities:[]};
+try{DIRECTORY=JSON.parse(localStorage.getItem(DIR_LS))||null}catch(e){DIRECTORY=null}
+
+const DH={acct:['account','accountname','corporateaccount','corporatename'],
+ fac:['companyfacilityname','facilityname','companyname','facility','propertyname'],
+ city:['facilitycity','corporationcity','city'],state:['facilitystate','corporationstate','state'],
+ status:['idstatus','status'],
+ mgr:['managername','manager'],mgrEmail:['managerfacilityemail','manageremail','facilityemail'],
+ mgrPhone:['managerphone'],
+ inv:['invoicecontactname','invoicecontact'],
+ invEmail:['invoicecontactemailaddress','invoicecontactemail','invoiceemail'],
+ invPhone:['invoicecontactphonenumber','invoicecontactphone'],
+ sw:['storagesoftwareprovider','software','storagesoftware'],
+ rm:['reportingmethod']};
+const DH_MAP={};for(const[k,v]of Object.entries(DH))v.forEach(h=>{if(!(h in DH_MAP))DH_MAP[h]=k});
+function nh(h){return String(h||'').toLowerCase().replace(/[^a-z]/g,'')}
+function dClean(v){if(v==null)return'';const s=String(v).trim();
+ return /^(n\/a|na|none|-|#n\/a)$/i.test(s)?'':s.replace(/\s+/g,' ')}
+function dEmail(v){const m=String(v||'').toLowerCase().match(/[\w.+-]+@[\w-]+\.[\w.-]+/);return m?m[0]:''}
+function dPhone(v){const s=dClean(v);let d=s.replace(/\D/g,'');
+ if(d.length===11&&d[0]==='1')d=d.slice(1);
+ return d.length===10?`(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`:s}
+
+/* Parse one sheet (array-of-arrays) into facility records. */
+function dirFromRows(rows){
+ let hr=-1,idx={};
+ for(let i=0;i<Math.min(rows.length,12);i++){
+  const m={};rows[i].forEach((c,j)=>{const k=DH_MAP[nh(c)];if(k&&!(k in m))m[k]=j});
+  const score=Object.keys(m).length;
+  if(score>=3&&(('invEmail'in m)||('mgrEmail'in m))){hr=i;idx=m;break}
+ }
+ if(hr<0)return[];
+ const out=[];
+ for(const r of rows.slice(hr+1)){
+  const g=k=>k in idx?dClean(r[idx[k]]):'';
+  const a=g('acct'),f=g('fac');
+  if(!a&&!f)continue;
+  const rec={a,f,c:g('city'),s:g('state'),st:g('status'),
+   m:g('mgr'),me:dEmail(g('mgrEmail')),mp:dPhone(g('mgrPhone')),
+   i:g('inv'),ie:dEmail(g('invEmail')),ip:dPhone(g('invPhone')),
+   sw:g('sw'),rm:g('rm')};
+  if(!rec.me&&!rec.ie)continue;
+  out.push(rec);
+ }
+ return out;
+}
+/* Read a whole workbook: pick client-list style sheets, skip credential sheets. */
+function dirFromWorkbook(wb){
+ let recs=[];
+ for(const nm of wb.SheetNames){
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[nm],{header:1,raw:false,defval:''});
+  if(!rows.length)continue;
+  const flat=rows.slice(0,12).flat().map(nh).join('|');
+  if(/password|username/.test(flat))continue;      // never ingest logins
+  recs=recs.concat(dirFromRows(rows));
+ }
+ // de-duplicate on account+facility+email
+ const seen=new Set(),out=[];
+ for(const r of recs){const k=(r.a+'|'+r.f+'|'+(r.ie||r.me)).toLowerCase();
+  if(seen.has(k))continue;seen.add(k);out.push(r)}
+ return out;
+}
+function setDirectory(facilities,source){
+ if(!facilities.length){toast('No client rows found in that file — check it has Account / Facility and email columns.');return}
+ DIRECTORY={source,at:new Date().toISOString(),facilities};
+ try{localStorage.setItem(DIR_LS,JSON.stringify(DIRECTORY))}
+ catch(e){toast('That list is too large for this browser to store.');DIRECTORY=null;return}
+ buildDirIndex();renderDirStat();
+ toast(`Directory loaded — ${DIR_IDX.facilities.length} facilities, ${DIR_IDX.accounts.length} corporate accounts.`);
+}
+function loadDirFile(file){
+ const ext=file.name.split('.').pop().toLowerCase();
+ const rd=new FileReader();
+ if(ext==='xlsx'||ext==='xls'){
+  if(!window.XLSX){toast('Excel reader still loading — try again in a moment.');return}
+  rd.onload=e=>{try{setDirectory(dirFromWorkbook(XLSX.read(new Uint8Array(e.target.result),{type:'array'})),file.name)}
+   catch(err){toast('That Excel file could not be read.')}};
+  rd.readAsArrayBuffer(file);
+ }else if(ext==='json'){
+  rd.onload=e=>{try{const d=JSON.parse(e.target.result);
+   setDirectory(Array.isArray(d)?d:(d.facilities||[]),file.name)}
+   catch(err){toast('That JSON file could not be read.')}};
+  rd.readAsText(file);
+ }else{
+  rd.onload=e=>setDirectory(dirFromRows(parseCSV(e.target.result)),file.name);
+  rd.readAsText(file);
+ }
+}
+function buildDirIndex(){
+ DIR_IDX={accounts:[],facilities:[]};
+ if(!DIRECTORY||!DIRECTORY.facilities)return;
+ const byA=new Map();
+ for(const f of DIRECTORY.facilities){
+  DIR_IDX.facilities.push(f);
+  if(!f.a)continue;
+  const k=f.a.toLowerCase();
+  let e=byA.get(k);
+  if(!e){e={name:f.a,n:0,bill:new Map(),sw:new Map()};byA.set(k,e)}
+  e.n++;
+  if(f.ie){const c=e.bill.get(f.ie)||{n:0,name:f.i,phone:f.ip};c.n++;c.name=c.name||f.i;e.bill.set(f.ie,c)}
+  if(f.sw)e.sw.set(f.sw,(e.sw.get(f.sw)||0)+1);
+ }
+ const top=m=>[...m.entries()].sort((x,y)=>(y[1].n||y[1])-(x[1].n||x[1]))[0];
+ for(const e of byA.values()){
+  const b=top(e.bill),s=top(e.sw);
+  DIR_IDX.accounts.push({kind:'account',name:e.name,count:e.n,
+   ie:b?b[0]:'',i:b?b[1].name:'',ip:b?b[1].phone:'',sw:s?s[0]:'',
+   choices:[...e.bill.entries()].map(([em,c])=>({e:em,n:c.name}))});
+ }
+ DIR_IDX.accounts.sort((a,b)=>a.name.localeCompare(b.name));
+}
+function dirSearch(q){
+ q=q.trim().toLowerCase();
+ if(q.length<2||!DIRECTORY)return[];
+ const hit=(s)=>{s=(s||'').toLowerCase();
+  const i=s.indexOf(q);return i<0?-1:(i===0?0:1)};
+ const res=[];
+ for(const a of DIR_IDX.accounts){const r=hit(a.name);
+  if(r>=0)res.push({rank:r,kind:'account',name:a.name,
+   meta:`${a.count} facilit${a.count>1?'ies':'y'}${a.sw?' · '+a.sw:''}`,rec:a})}
+ for(const f of DIR_IDX.facilities){
+  const r=Math.min(...[hit(f.f),hit(f.a)].filter(x=>x>=0).concat([9]));
+  if(r<9)res.push({rank:r+2,kind:'facility',name:f.f||f.a,
+   meta:[f.a&&f.a!==f.f?f.a:'',[f.c,f.s].filter(Boolean).join(', '),f.sw].filter(Boolean).join(' · '),rec:f})}
+ res.sort((x,y)=>x.rank-y.rank||x.name.localeCompare(y.name));
+ return res.slice(0,40);
+}
+/* --- picking a match fills the form --- */
+let dirPick=null;
+function contactSource(){return S.settings.contactSource||'billing'}
+function applyPick(p){
+ dirPick=p;
+ const r=p.rec,src=contactSource();
+ const bill={e:r.ie||'',n:r.i||'',p:r.ip||''};
+ const mgr=p.kind==='account'?{e:'',n:'',p:''}:{e:r.me||'',n:r.m||'',p:r.mp||''};
+ const use=(src==='manager'&&mgr.e)?mgr:(bill.e?bill:mgr);
+ $('#fName').value=p.kind==='account'?r.name:(r.a||r.f);
+ $('#fProperty').value=p.kind==='facility'?(r.f||''):'';
+ $('#fEmail').value=use.e;$('#fContact').value=use.n;$('#fPhone').value=use.p;
+ if(r.sw)$('#fPms').value=r.sw;
+ $('#srcRow').hidden=!(bill.e&&mgr.e);
+ $$('#srcRow button').forEach(b=>b.classList.toggle('on',b.dataset.src===(use===mgr?'manager':'billing')));
+ const h=$('#dirHint');h.className='dirhint good';
+ let msg=`Filled from your directory — ${use===mgr?'facility manager':'billing contact'}`;
+ if(p.kind==='account'&&p.rec.choices&&p.rec.choices.length>1)
+  msg+=` (this account has ${p.rec.choices.length} billing contacts — check it's the right one)`;
+ h.textContent=msg+'.';
+ const rm=(r.rm||'').toLowerCase();
+ if(/api|automated/.test(rm)){h.className='dirhint warn';
+  h.textContent=msg+`. Note: this one reports by ${r.rm} — it may not need chasing.`}
+ hideDirResults();
+}
+function showDirResults(items){
+ const box=$('#dirResults');
+ if(!items.length){hideDirResults();return}
+ box.innerHTML=items.map((it,i)=>`<button type="button" data-i="${i}">
+  <span class="nm">${esc(it.name)}<span class="kind">${it.kind==='account'?'account':'facility'}</span></span>
+  <span class="mt">${esc(it.meta||'')}</span></button>`).join('');
+ box._items=items;box.hidden=false;
+}
+function hideDirResults(){const b=$('#dirResults');b.hidden=true;b.innerHTML=''}
+function renderDirStat(){
+ const on=!!(DIRECTORY&&DIR_IDX.facilities.length);
+ const el=$('#dirStat');if(!el)return;
+ el.classList.toggle('on',on);
+ $('#dirStatTx').innerHTML=on
+  ? `<b>${DIR_IDX.facilities.length}</b> facilities · <b>${DIR_IDX.accounts.length}</b> corporate accounts loaded`
+    +`<span class="hint" style="display:block">from ${esc(DIRECTORY.source||'your list')}</span>`
+  : 'No directory loaded — contacts are typed in by hand.';
+ $('#dirClear').style.display=on?'':'none';
+}
+/* optional: auto-load a directory.json placed beside this page */
+function autoLoadDirectory(){
+ if(DIRECTORY)return;
+ fetch('directory.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{
+  if(!d)return;setDirectory(d.facilities||d,'directory.json');
+ }).catch(()=>{});
+}
 
 /* ---------------- import ---------------- */
 const HEAD={name:['accountname','account','customer','customername','company','companyname','name','tenant','client'],
@@ -628,8 +861,45 @@ $('#importJson').onchange=e=>{const f=e.target.files[0];if(!f)return;
   S.settings.templates=Object.assign({...DEFAULTS},S.settings.templates);
   save();renderSettings();render();toast('Backup restored.')}catch(err){toast('That file is not a valid backup.')}};
  rd.readAsText(f);e.target.value=''};
-$('#resetAll').onclick=()=>{if(confirm('Erase all customers and drafts? This cannot be undone.')){
- S=fresh();save();renderSettings();render();toast('Everything erased.')}};
+$('#resetAll').onclick=()=>{if(confirm('Erase all customers and drafts? This cannot be undone.\n\n(Your loaded company directory is kept — remove it separately under Company directory.)')){
+ S=fresh();save();renderSettings();render();toast('Customers and drafts erased.')}};
+
+
+/* ---------------- directory wiring ---------------- */
+$('#fName').addEventListener('input',e=>{
+ dirPick=null;
+ const q=e.target.value;
+ if(!DIRECTORY){hideDirResults();return}
+ showDirResults(dirSearch(q));
+});
+$('#fName').addEventListener('keydown',e=>{
+ const box=$('#dirResults');if(box.hidden)return;
+ const btns=[...box.querySelectorAll('button')];if(!btns.length)return;
+ let i=btns.findIndex(b=>b.classList.contains('on'));
+ if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();
+  i=e.key==='ArrowDown'?Math.min(i+1,btns.length-1):Math.max(i-1,0);
+  btns.forEach(b=>b.classList.remove('on'));btns[i].classList.add('on');
+  btns[i].scrollIntoView({block:'nearest'});}
+ else if(e.key==='Enter'&&i>=0){e.preventDefault();btns[i].click()}
+ else if(e.key==='Escape'){hideDirResults()}
+});
+$('#dirResults').addEventListener('click',e=>{
+ const b=e.target.closest('button');if(!b)return;
+ const items=$('#dirResults')._items||[];
+ const it=items[+b.dataset.i];if(it)applyPick(it);
+});
+document.addEventListener('click',e=>{
+ if(!e.target.closest('.dirwrap'))hideDirResults();
+});
+$('#srcRow').addEventListener('click',e=>{
+ const b=e.target.closest('button[data-src]');if(!b||!dirPick)return;
+ S.settings.contactSource=b.dataset.src;save();applyPick(dirPick);
+});
+$('#dirFile').onchange=e=>{if(e.target.files[0])loadDirFile(e.target.files[0]);e.target.value=''};
+$('#dirClear').onclick=()=>{
+ if(!confirm('Remove the loaded directory from this browser? Your customers are not affected.'))return;
+ DIRECTORY=null;localStorage.removeItem(DIR_LS);buildDirIndex();renderDirStat();toast('Directory removed.')};
+buildDirIndex();renderDirStat();autoLoadDirectory();
 
 /* boot */
 renderSettings();renderPms();render();save();
