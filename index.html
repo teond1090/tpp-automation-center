@@ -123,6 +123,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .dirhint.good{color:var(--good-text)}
 .dirhint.warn{color:#8f5a00}
 .bigsearch{font-size:1.05rem;padding:.8rem .95rem}
+.loadrow{display:flex;gap:.7rem;align-items:center;flex-wrap:wrap;margin-top:.7rem;padding:.7rem .9rem;background:var(--warn-soft);border:1px solid var(--warn);border-radius:11px;font-size:.9rem;font-weight:600}
 .lookup h2{margin-bottom:.35rem}
 .ccard{border:1px solid var(--grid);border-radius:13px;margin-top:.9rem;overflow:hidden;background:var(--surface)}
 .ccard .chead{display:flex;gap:.7rem;align-items:flex-start;padding:.85rem 1rem;background:var(--accent-soft);
@@ -188,6 +189,10 @@ details.help li{margin-bottom:.3rem}
     <input id="lookup" class="bigsearch" autocomplete="off"
       placeholder="Type a facility or corporate account name…">
     <div id="lookupResults" class="dirlist" hidden></div>
+  </div>
+  <div id="lookupLoad" class="loadrow" style="display:none">
+    <span>📇 No client list loaded in this browser yet.</span>
+    <label class="btn primary"><input type="file" id="dirFile2" accept=".xlsx,.xls,.csv,.json" hidden>Load master list…</label>
   </div>
   <div id="lookupDetail"></div>
 </div>
@@ -863,11 +868,15 @@ function addFromLookup(which){
 }
 function renderLookupHint(){
  const el=$('#lookupHint');if(!el)return;
- el.innerHTML=DIRECTORY&&DIR_IDX.facilities.length
+ const on=!!(DIRECTORY&&DIR_IDX.facilities.length);
+ el.innerHTML=on
   ? `Type any facility or corporate account name — the billing contact and facility manager appear instantly. `
     +`<b>${DIR_IDX.facilities.length}</b> facilities loaded.`
-  : `Load your master client list once under <b>Settings &rarr; Company directory</b> and every facility becomes searchable here.`;
- $('#lookup').disabled=!(DIRECTORY&&DIR_IDX.facilities.length);
+  : `One-time setup: load your master client list and every facility becomes searchable here.`;
+ $('#lookup').disabled=false;                       // never a dead control
+ $('#lookup').placeholder=on?'Type a facility or corporate account name…'
+  :'Load your client list below to search facilities…';
+ $('#lookupLoad').style.display=on?'none':'';
 }
 
 /* ---------------- import ---------------- */
@@ -1006,6 +1015,7 @@ $('#srcRow').addEventListener('click',e=>{
  S.settings.contactSource=b.dataset.src;save();applyPick(dirPick);
 });
 $('#dirFile').onchange=e=>{if(e.target.files[0])loadDirFile(e.target.files[0]);e.target.value=''};
+$('#dirFile2').onchange=e=>{if(e.target.files[0])loadDirFile(e.target.files[0]);e.target.value=''};
 $('#dirClear').onclick=()=>{
  if(!confirm('Remove the loaded directory from this browser? Your customers are not affected.'))return;
  DIRECTORY=null;localStorage.removeItem(DIR_LS);buildDirIndex();renderDirStat();clearLookup();renderLookupHint();toast('Directory removed.')};
@@ -1013,7 +1023,10 @@ buildDirIndex();renderDirStat();autoLoadDirectory();
 
 /* lookup wiring */
 $('#lookup').addEventListener('input',e=>{
- if(!DIRECTORY){hideLookupResults();return}
+ if(!DIRECTORY||!DIR_IDX.facilities.length){
+  hideLookupResults();
+  if(e.target.value.trim())toast('Load your master client list first — the button is just below the search box.');
+  return}
  showLookupResults(dirSearch(e.target.value));
 });
 $('#lookup').addEventListener('keydown',e=>{
