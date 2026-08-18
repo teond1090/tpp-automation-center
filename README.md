@@ -46,12 +46,22 @@ classification, dispute tickets, compliance scores, role-based permissions and a
 app. [`ARCHITECTURE.md`](ARCHITECTURE.md) documents the event-driven production design that
 version mirrors.
 
-## Look up a facility
+## Search → draft → review
 
-The first thing on the page is a search box. Type a facility name (or a corporate account
-name) and a contact card appears showing **both** contacts side by side — billing contact
-and facility manager, each with name, email and phone — plus the location, storage software
-and reporting method. Copy either address, or add either one to the chase list in one click.
+The whole workflow is four steps on one screen:
+
+1. **Search** a facility name or corporate account name.
+2. The **Facility Manager and Invoice/Billing Contact** are pulled from the master list and
+   shown side by side — name, email and phone each — with location, storage software,
+   account status and reporting method.
+3. Press **✉ Draft coverage report request** and the email is generated addressed to both
+   contacts (or pick billing-only / manager-only).
+4. The draft opens in the **review queue**. Read it, edit the wording if you like, then
+   approve — approving opens it in your own email program so you press Send yourself.
+
+Nothing is ever sent without approval. Facilities that already report by API or automated
+email are flagged, since they normally need no chasing at all. You can also just copy an
+address, or add a contact to the chase list for the recurring late-report sequence.
 Facilities that already report by API or automated email are flagged as such, since they
 normally need no chasing at all.
 

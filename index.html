@@ -145,6 +145,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .cbox .cline a{text-decoration:none}
 .cbox .none{color:var(--muted);font-size:.9rem;font-style:italic}
 .cbox .row{margin-top:.55rem}
+.cactions{padding:.8rem 1rem;border-top:1px solid var(--grid);display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;background:var(--surface-2)}
 .cmeta{padding:.6rem 1rem;border-top:1px solid var(--grid);font-size:.84rem;color:var(--ink-2);
  display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
 .cmeta .pill{background:var(--surface-2);border-radius:99px;padding:.1rem .55rem;font-size:.78rem;font-weight:600}
@@ -173,7 +174,7 @@ details.help li{margin-bottom:.3rem}
     <div class="logo"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3z" fill="#fff" opacity=".92"/><path d="M8.2 12.3l2.6 2.6 5-5.2" stroke="#1c5cab" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <div class="brand">
       <h1>Coverage Report Chaser</h1>
-      <div class="sub">Tenant Property Protection <span class="ver">v4 · Aug 18</span></div>
+      <div class="sub">Tenant Property Protection <span class="ver">v5 · Aug 18</span></div>
     </div>
     <div class="right">
       <button class="btn" id="addBtn">+ Add customer</button>
@@ -434,10 +435,15 @@ function needsChasing(c){return statusOf(c).key==='late'&&!!c.email
 /* ---------------- drafting ---------------- */
 function fill(t,c){const map={Name:c.contact||c.name,Property:c.property||c.name,Amount:fmt$(c.amount)};
  return String(t).replace(/\{\{(\w+)\}\}/g,(_,k)=>map[k]??`{{${k}}}`)}
+function recipientsOf(c){
+ const list=(c.recipients&&c.recipients.length)?c.recipients:[{email:c.email,name:c.contact,role:'contact'}];
+ return list.filter(r=>r&&r.email);
+}
+function toLine(c){return recipientsOf(c).map(r=>r.email).join(', ')}
 function draftFor(c){
  const first=!c.lastAsked;
  const T=S.settings.templates;
- return {id:uid(),custId:c.id,to:c.email,
+ return {id:uid(),custId:c.id,to:toLine(c),
   subject:fill(T.subject,c),
   body:fill(first?T.first:T.follow,c),
   kind:first?'First request':'Follow-up',
@@ -841,6 +847,12 @@ function renderLookupDetail(){
    ${contactBlock('Billing contact',bill,r,'billing')}
    ${contactBlock(isAcct?'Facility manager':'Facility manager',mgr,r,'manager')}
   </div>
+  <div class="cactions">
+   <button class="btn primary" onclick="draftFromLookup('both')">✉ Draft coverage report request</button>
+   ${bill.e?`<button class="btn" onclick="draftFromLookup('billing')">Billing contact only</button>`:''}
+   ${mgr.e?`<button class="btn" onclick="draftFromLookup('manager')">Facility manager only</button>`:''}
+   <span class="hint" style="margin:0">You review and approve before anything sends.</span>
+  </div>
   ${meta?`<div class="cmeta">${meta}${auto?'<span class="hint" style="margin:0">— already automated, may not need chasing</span>':''}</div>`:''}
  </div>`;
 }
@@ -868,6 +880,37 @@ function addFromLookup(which){
   property,phone:ct.p,lastReport:null,amount:0,pms:r.sw||'',timesAsked:0});
  save();render();renderLookupDetail();
  toast(`${name||ct.n} added to your chase list (${which==='manager'?'facility manager':'billing contact'}).`);
+}
+function draftFromLookup(which){
+ if(!lookupPick){toast('Search for a facility first.');return}
+ const r=lookupPick.rec,isAcct=lookupPick.kind==='account';
+ const bill={role:'billing',name:r.i||'',email:(r.ie||'').toLowerCase(),phone:r.ip||''};
+ const mgr=isAcct?{role:'manager',name:'',email:'',phone:''}
+  :{role:'manager',name:r.m||'',email:(r.me||'').toLowerCase(),phone:r.mp||''};
+ let picked = which==='billing'?[bill] : which==='manager'?[mgr] : [mgr,bill];
+ picked=picked.filter(x=>x.email);
+ // never address the same mailbox twice
+ const seen=new Set(); picked=picked.filter(x=>!seen.has(x.email)&&seen.add(x.email));
+ if(!picked.length){toast('No email address on file for that contact.');return}
+ const name=isAcct?r.name:(r.a||r.f||'');
+ const property=isAcct?'':(r.f||'');
+ const primary=picked[0];
+ let c=S.customers.find(x=>(x.property||'').toLowerCase()===property.toLowerCase()
+   && (x.name||'').toLowerCase()===name.toLowerCase());
+ if(!c){
+  c={id:uid(),name:name||primary.name||primary.email,email:primary.email,contact:primary.name,
+     property,phone:primary.phone||'',lastReport:null,amount:0,pms:r.sw||'',timesAsked:0,recipients:picked};
+  S.customers.push(c);
+ }else{
+  c.recipients=picked;c.email=primary.email;c.contact=c.contact||primary.name;
+ }
+ const d=draftFor(c);
+ d.kind=(c.timesAsked?'Follow-up':'First request')+' · '+
+  (picked.length>1?'facility manager + billing':picked[0].role==='billing'?'billing contact':'facility manager');
+ S.drafts.unshift(d);
+ save();render();
+ $('#reviewCard').scrollIntoView({behavior:'smooth',block:'start'});
+ toast('Draft ready — review it below. Nothing is sent until you approve it.');
 }
 function renderLookupHint(){
  const el=$('#lookupHint');if(!el)return;
