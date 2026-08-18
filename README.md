@@ -68,21 +68,43 @@ email, phone, property and software for you.
 
 ## Company directory (auto-fill contacts)
 
-Under **Settings → Company directory**, load the master client list (`.xlsx`, `.csv`, or a
-`directory.json`) once — that is what powers the lookup above.
+The client list ships with the app as **`directory.enc.json`**, encrypted with AES-256-GCM
+(PBKDF2-SHA256, 310k iterations). On first visit the app asks for the passphrase once per
+browser, decrypts locally and caches the result — after that, searching just works with no
+upload step. The encrypted file is downloadable by anyone, but is unreadable without the
+passphrase, so no contact data is exposed by publishing it.
+
+**Updating it when you get new customers:**
+
+1. Load the new or updated list in the app (Settings → Company directory → *Load / update
+   master list…*). Updates are **additive** — new facilities are added, changed details are
+   refreshed, and everything else is kept, so a file with only the new customers is enough.
+2. Click **Publish encrypted copy…**, choose the passphrase, and save the file.
+3. Upload the resulting `directory.enc.json` to the repository (drag it onto the file list
+   on GitHub and commit).
+
+Everyone else's browser notices the new version on their next visit and offers to update.
+Choosing a new passphrase at step 2 rotates it for everyone.
+
+Offline alternative: `node tools/encrypt-directory.js <directory.json> <passphrase>` does the
+same thing from the command line, so the plaintext list never has to leave your machine.
+
+You can also still load a plain `.xlsx`/`.csv` by hand at any time — useful for a one-off
+or for working without the published file.
 
 Two things worth knowing:
 
-- **The directory never leaves the browser.** It is stored in local storage on the machine
-  that loaded it — it is not uploaded, and it is deliberately **not** part of this public
-  site. Each person loads their own copy; re-load the file whenever the master list changes.
+- **Decryption happens in the browser.** The list is decrypted locally and cached in local
+  storage on that machine; the plaintext is never uploaded anywhere. Only the encrypted
+  file is published.
 - **Logins are ignored on purpose.** Any sheet containing username/password columns is
   skipped during import, so software credentials in the master workbook never enter the app.
 
-`.gitignore` blocks client lists and `directory.json` from being committed, so customer
-contact data cannot be published by accident. If you ever want the directory to load
-automatically with no manual step, that requires hosting the site privately — ask before
-placing a `directory.json` next to `index.html`, because anything in this repo is public.
+`.gitignore` blocks plaintext client lists and `directory.json` from being committed, so
+customer contact data cannot be published unencrypted by accident. Only the encrypted
+`directory.enc.json` belongs in this repo. Treat the passphrase as a shared secret: the
+encrypted file is public, so anyone who learns the passphrase can read that snapshot, and
+rotating it does not un-publish copies already downloaded.
 
 The Excel reader (SheetJS) is vendored in `vendor/` rather than loaded from a CDN, so
 imports keep working offline and behind restrictive networks.

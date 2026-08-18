@@ -174,7 +174,7 @@ details.help li{margin-bottom:.3rem}
     <div class="logo"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3z" fill="#fff" opacity=".92"/><path d="M8.2 12.3l2.6 2.6 5-5.2" stroke="#1c5cab" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <div class="brand">
       <h1>Coverage Report Chaser</h1>
-      <div class="sub">Tenant Property Protection <span class="ver">v6 · Aug 18</span></div>
+      <div class="sub">Tenant Property Protection <span class="ver">v7 · Aug 18</span></div>
     </div>
     <div class="right">
       <button class="btn" id="addBtn">+ Add customer</button>
@@ -194,6 +194,7 @@ details.help li{margin-bottom:.3rem}
       placeholder="Type a facility or corporate account name…">
     <div id="lookupResults" class="dirlist" hidden></div>
   </div>
+  <div id="dirLock" class="loadrow" style="display:none"></div>
   <div id="lookupLoad" class="loadrow" style="display:none">
     <span>📇 No client list loaded in this browser yet.</span>
     <label class="btn primary"><input type="file" id="dirFile2" accept=".xlsx,.xls,.csv,.json" hidden>Load master list…</label>
@@ -302,6 +303,8 @@ details.help li{margin-bottom:.3rem}
         <label class="btn primary"><input type="file" id="dirFile" accept=".xlsx,.xls,.csv,.json" hidden>Load / update master list…</label>
         <button class="btn" id="dirReplace">Replace entirely…</button>
         <input type="file" id="dirFileReplace" accept=".xlsx,.xls,.csv,.json" hidden>
+        <button class="btn" id="dirPublish">Publish encrypted copy…</button>
+        <button class="btn" id="dirForget">Forget passphrase</button>
         <button class="btn" id="dirClear">Remove directory</button>
       </div>
       <p class="hint" style="margin-top:.5rem"><b>Updates add to what you already have.</b> Loading a newer file adds new
@@ -957,6 +960,92 @@ function renderLookupHint(){
  $('#lookupLoad').style.display=on?'none':'';
 }
 
+/* ---------------- encrypted published directory ----------------
+   directory.enc.json holds the client list encrypted with AES-256-GCM.
+   The passphrase is entered once per browser; the decrypted list is then
+   cached locally exactly like a manually loaded file.                  */
+const DIR_PASS_LS='tpp-directory-pass';
+const b64d=b=>Uint8Array.from(atob(b),c=>c.charCodeAt(0));
+const b64e=u=>btoa(String.fromCharCode(...new Uint8Array(u)));
+async function deriveKey(pass,salt,iter){
+ const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+ return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:iter,hash:'SHA-256'},km,
+  {name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+async function decryptDirectory(blob,pass){
+ const key=await deriveKey(pass,b64d(blob.salt),blob.iter||310000);
+ const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64d(blob.iv)},key,b64d(blob.ct));
+ return JSON.parse(new TextDecoder().decode(plain));
+}
+async function encryptDirectory(facilities,pass){
+ const enc=new TextEncoder().encode(JSON.stringify({facilities}));
+ const salt=crypto.getRandomValues(new Uint8Array(32)),iv=crypto.getRandomValues(new Uint8Array(12));
+ const iter=310000,key=await deriveKey(pass,salt,iter);
+ const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,enc);
+ const dg=await crypto.subtle.digest('SHA-256',enc);
+ return {v:1,kdf:'PBKDF2-SHA256',iter,ver:b64e(dg).replace(/\W/g,'').slice(0,16),
+  count:facilities.length,updated:iso(today()),
+  salt:b64e(salt),iv:b64e(iv),ct:b64e(ct)};
+}
+let ENC_BLOB=null;
+async function checkPublishedDirectory(){
+ if(!window.crypto||!crypto.subtle)return;                 // needs https
+ let blob;
+ try{const r=await fetch('directory.enc.json',{cache:'no-store'});if(!r.ok)return;blob=await r.json()}
+ catch(e){return}
+ if(!blob||!blob.ct)return;
+ ENC_BLOB=blob;
+ const haveVer=DIRECTORY&&DIRECTORY.encVer;
+ if(DIRECTORY&&haveVer===blob.ver)return;                  // already current
+ const saved=localStorage.getItem(DIR_PASS_LS);
+ if(saved){
+  try{await unlockDirectory(saved,true);return}catch(e){localStorage.removeItem(DIR_PASS_LS)}
+ }
+ renderDirLock(DIRECTORY?'update':'locked');
+}
+async function unlockDirectory(pass,quiet){
+ const data=await decryptDirectory(ENC_BLOB,pass);         // throws on wrong passphrase
+ setDirectory(data.facilities||[], 'company directory'+(ENC_BLOB.updated?' ('+ENC_BLOB.updated+')':''), 'replace');
+ if(DIRECTORY)DIRECTORY.encVer=ENC_BLOB.ver;
+ try{localStorage.setItem(DIR_LS,JSON.stringify(DIRECTORY))}catch(e){}
+ if($('#dirRemember')?.checked!==false)try{localStorage.setItem(DIR_PASS_LS,pass)}catch(e){}
+ renderDirLock(null);
+ if(!quiet)toast(`Directory unlocked — ${DIR_IDX.facilities.length} facilities ready to search.`);
+ return true;
+}
+function renderDirLock(mode){
+ const el=$('#dirLock');if(!el)return;
+ if(!mode){el.style.display='none';el.innerHTML='';return}
+ el.style.display='';
+ el.innerHTML=mode==='update'
+  ? `<span>📇 An updated company directory was published${ENC_BLOB.updated?' on '+esc(ENC_BLOB.updated):''}
+      (${ENC_BLOB.count} facilities).</span>
+     <button class="btn primary" onclick="promptUnlock()">Update now</button>`
+  : `<span>🔒 The company directory is protected. Enter the passphrase once on this computer.</span>
+     <input id="dirPass" type="password" placeholder="Passphrase" style="max-width:220px"
+       onkeydown="if(event.key==='Enter')doUnlock()">
+     <button class="btn primary" onclick="doUnlock()">Unlock</button>
+     <label class="hint" style="margin:0"><input type="checkbox" id="dirRemember" checked style="width:auto"> Remember on this computer</label>`;
+}
+function promptUnlock(){renderDirLock('locked');$('#dirPass')?.focus()}
+async function doUnlock(){
+ const p=($('#dirPass')||{}).value||'';
+ if(!p){toast('Enter the passphrase.');return}
+ try{await unlockDirectory(p)}
+ catch(e){toast('That passphrase did not work — check it and try again.')}
+}
+/* Publish a new encrypted copy (rotate the passphrase or push an update). */
+async function publishEncrypted(){
+ if(!DIRECTORY||!DIRECTORY.facilities?.length){toast('Load a directory first.');return}
+ const p=prompt('Choose a passphrase for the published directory.\n\nEveryone who uses the app will enter this once. Use something long — the encrypted file is publicly downloadable.');
+ if(!p)return;
+ if(p.length<12){toast('Use at least 12 characters — this protects your client list.');return}
+ const blob=await encryptDirectory(DIRECTORY.facilities,p);
+ const u=URL.createObjectURL(new Blob([JSON.stringify(blob)],{type:'application/json'}));
+ const a=document.createElement('a');a.href=u;a.download='directory.enc.json';a.click();URL.revokeObjectURL(u);
+ toast('Encrypted file downloaded — upload it to the repository to publish it.');
+}
+
 /* ---------------- import ---------------- */
 const HEAD={name:['accountname','account','customer','customername','company','companyname','name','tenant','client'],
  property:['propertyname','property','facility','facilityname','site','sitename','location'],
@@ -1098,10 +1187,12 @@ $('#dirReplace').onclick=()=>{
  if(!confirm('Replace the whole directory with a new file?\n\nAnything not in the new file will be removed. Cancel if you meant to just add updates.'))return;
  $('#dirFileReplace').click()};
 $('#dirFileReplace').onchange=e=>{if(e.target.files[0])loadDirFile(e.target.files[0],'replace');e.target.value=''};
+$('#dirPublish').onclick=publishEncrypted;
+$('#dirForget').onclick=()=>{localStorage.removeItem(DIR_PASS_LS);toast('Passphrase forgotten on this computer.')};
 $('#dirClear').onclick=()=>{
  if(!confirm('Remove the loaded directory from this browser? Your customers are not affected.'))return;
  DIRECTORY=null;localStorage.removeItem(DIR_LS);buildDirIndex();renderDirStat();clearLookup();renderLookupHint();toast('Directory removed.')};
-buildDirIndex();renderDirStat();autoLoadDirectory();
+buildDirIndex();renderDirStat();autoLoadDirectory();checkPublishedDirectory();
 
 /* lookup wiring */
 $('#lookup').addEventListener('input',e=>{
