@@ -62,8 +62,6 @@ The whole workflow is four steps on one screen:
 Nothing is ever sent without approval. Facilities that already report by API or automated
 email are flagged, since they normally need no chasing at all. You can also just copy an
 address, or add a contact to the chase list for the recurring late-report sequence.
-Facilities that already report by API or automated email are flagged as such, since they
-normally need no chasing at all.
 
 The same lookup runs inside **Add customer**, so typing a name there fills in the contact,
 email, phone, property and software for you.
