@@ -1,5 +1,7 @@
 # TPP Automation Center — Coverage Reports & Collections
 
+**Live app: <https://teond1090.github.io/tpp-automation-center/>**
+
 Automated system for Tenant Property Protection that manages two workflows end to end:
 
 1. **Missing Coverage Report Collection** — identify customers who haven't submitted their
@@ -11,8 +13,8 @@ Automated system for Tenant Property Protection that manages two workflows end t
 
 ## Running it
 
-`index.html` is fully self-contained — open it in a browser, or serve the repo with GitHub
-Pages (Settings → Pages → Deploy from branch → `main` / root). All data stays in the
+Use the live link above (deployed automatically from `main` by GitHub Actions), or open
+`index.html` directly in a browser — it is fully self-contained. All data stays in the
 browser (localStorage); nothing is sent anywhere.
 
 Quick tour:
