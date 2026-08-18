@@ -126,6 +126,21 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .dirhint.good{color:var(--good-text)}
 .dirhint.warn{color:#8f5a00}
 .bigsearch{font-size:1.05rem;padding:.8rem .95rem}
+#bulkInput{min-height:130px;font-size:.95rem}
+.bmatch{display:flex;gap:.6rem;align-items:center;padding:.5rem 0;border-bottom:1px solid var(--grid);font-size:.88rem;flex-wrap:wrap}
+.bmatch:last-child{border-bottom:0}
+.bmatch .bi{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;flex:none;font-size:.85rem}
+.bmatch .bi.ok{background:var(--good-soft);color:var(--good-text)}
+.bmatch .bi.warn{background:var(--warn-soft);color:var(--warn-text)}
+.bmatch .bi.bad{background:var(--critical-soft);color:var(--critical)}
+.bmatch .bn{flex:1;min-width:170px}
+.bmatch .bn b{display:block}
+.bmatch .bn .sub{font-size:.8rem;color:var(--muted)}
+.bmatch select{max-width:270px}
+.bsum{display:flex;gap:1rem;flex-wrap:wrap;margin:.8rem 0 .4rem;font-size:.9rem;font-weight:600}
+.bsum span{padding:.3rem .7rem;border-radius:99px;background:var(--surface-2)}
+.bsum span.ok{background:var(--good-soft);color:var(--good-text)}
+.bsum span.bad{background:var(--critical-soft);color:var(--critical)}
 .loadrow{display:flex;gap:.7rem;align-items:center;flex-wrap:wrap;margin-top:.7rem;padding:.7rem .9rem;background:var(--warn-soft);border:1px solid var(--warn);border-radius:11px;font-size:.9rem;font-weight:600}
 .lookup h2{margin-bottom:.35rem}
 .ccard{border:1px solid var(--grid);border-radius:13px;margin-top:.9rem;overflow:hidden;background:var(--surface)}
@@ -174,7 +189,7 @@ details.help li{margin-bottom:.3rem}
     <div class="logo"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3z" fill="#fff" opacity=".92"/><path d="M8.2 12.3l2.6 2.6 5-5.2" stroke="#1c5cab" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <div class="brand">
       <h1>Coverage Report Chaser</h1>
-      <div class="sub">Tenant Property Protection <span class="ver">v8 · Aug 18</span></div>
+      <div class="sub">Tenant Property Protection <span class="ver">v9 · Aug 18</span></div>
     </div>
     <div class="right">
       <button class="btn" id="addBtn">+ Add customer</button>
@@ -202,6 +217,28 @@ details.help li{margin-bottom:.3rem}
   <div id="lookupDetail"></div>
 </div>
 
+<!-- BULK LIST FROM ACCOUNTING -->
+<div class="card" id="bulkCard">
+  <div class="row spread">
+    <div>
+      <h2>📋 Paste the list from Accounting</h2>
+      <p class="hint">One location per line — or paste a whole column straight out of Excel. Every name is matched to
+        your directory, then all the emails are drafted at once and saved for Outlook.</p>
+    </div>
+    <button class="btn small" id="bulkToggle">Open</button>
+  </div>
+  <div id="bulkBody" style="display:none">
+    <textarea id="bulkInput" placeholder="Harbor Point Storage&#10;Central Idaho Storage&#10;Redline Storage Center&#10;…"></textarea>
+    <div class="row" style="margin-top:.6rem">
+      <button class="btn primary" id="bulkMatch">Match these locations</button>
+      <button class="btn" id="bulkClear">Clear</button>
+      <label class="hint" style="margin:0"><input type="checkbox" id="bulkBoth" checked style="width:auto">
+        Send to both the facility manager and the billing contact</label>
+    </div>
+    <div id="bulkResults"></div>
+  </div>
+</div>
+
 <div id="banner"></div>
 
 <!-- REVIEW QUEUE -->
@@ -212,7 +249,10 @@ details.help li{margin-bottom:.3rem}
       <p class="hint">Nothing is ever sent automatically. Read each one, then approve it — approving opens it in your
         email program so you press Send yourself.</p>
     </div>
-    <button class="btn" id="approveAll">✓ Approve all</button>
+    <div class="row">
+      <button class="btn primary" id="exportOutlook">📥 Save all to Outlook</button>
+      <button class="btn" id="approveAll">✓ Approve all</button>
+    </div>
   </div>
   <div id="reviewList"></div>
 </div>
@@ -280,6 +320,8 @@ details.help li{margin-bottom:.3rem}
         <label class="hint" style="flex:1;min-width:220px">Wait
           <input type="number" id="setGap" min="1" style="width:90px;display:inline-block"> days between follow-ups</label>
       </div>
+      <div class="f" style="margin-top:.6rem"><label>Your email address (used as the From line on Outlook drafts)</label>
+        <input id="setFrom" type="email" placeholder="you@tenantpropertyprotection.com"></div>
       <div class="row" style="margin-top:.5rem"><button class="btn primary" id="saveRules">Save</button></div>
     </div>
   </details>
@@ -567,6 +609,7 @@ function renderReview(){
          <button class="btn small" onclick="unapprove('${d.id}')">Undo approval</button>`
        :`<button class="btn small primary" onclick="approve('${d.id}')">✓ Approve &amp; open email</button>
          <button class="btn small" onclick="approve('${d.id}',false)">Approve only</button>`}
+    <button class="btn small" onclick="exportOneEml('${d.id}')">📥 Outlook draft</button>
     <button class="btn small" id="edit-${d.id}" onclick="editDraft('${d.id}')">✎ Edit wording</button>
     <button class="btn small" onclick="copyText(${JSON.stringify(d.subject+'\n\n'+d.body).replace(/"/g,'&quot;')})">Copy</button>
     <button class="btn small danger" onclick="discard('${d.id}')">Delete</button>
@@ -599,6 +642,7 @@ function renderSettings(){
  const s=S.settings;
  $('#tplSubject').value=s.templates.subject;$('#tplFirst').value=s.templates.first;$('#tplFollow').value=s.templates.follow;
  $('#setLate').value=s.lateDays;$('#setGap').value=s.gapDays;
+ $('#setFrom').value=s.fromAddress||'';
  $('#reportsAddr').textContent=REPORTS_ADDR;
 }
 function render(){renderBanner();renderReview();renderCustomers();if(typeof lookupPick!=='undefined'&&lookupPick)renderLookupDetail()}
@@ -1056,6 +1100,173 @@ async function publishEncrypted(){
  toast('Encrypted file downloaded — upload it to the repository to publish it.');
 }
 
+/* ---------------- bulk list from Accounting ----------------
+   Paste many locations, match them to the directory, draft every email at
+   once, then hand Outlook a folder of ready-to-send drafts.            */
+let BULK=[];
+function normName(x){return String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()}
+const HEADERISH=/^(facility|location|account|customer|property|site|company|corporate|store|unit)?\s*(name|id|number|list)?$/i;
+function splitBulk(text){
+ let rows=String(text||'').split(/\r?\n/)
+  .map(l=>l.split('\t')[0].replace(/^["']|["'],?$/g,'').trim())   // first Excel column
+  .filter(Boolean);
+ // drop a header row if the list starts with one ("Facility Name", "Location ID", …)
+ while(rows.length&&HEADERISH.test(rows[0].trim()))rows.shift();
+ return rows;
+}
+function matchLocation(name){
+ const q=normName(name);
+ if(!q||!DIRECTORY)return {name,status:'none',options:[]};
+ const cands=[];
+ for(const f of DIR_IDX.facilities){
+  const nf=normName(f.f),na=normName(f.a);
+  let score=-1;
+  if(nf===q||na===q)score=0;
+  else if(nf.startsWith(q)||na.startsWith(q))score=1;
+  else if(nf.includes(q)||na.includes(q))score=2;
+  if(score>=0)cands.push({score,kind:'facility',rec:f,
+   label:`${f.f||f.a}${f.c?' — '+f.c+(f.s?', '+f.s:''):''}`});
+ }
+ for(const a of DIR_IDX.accounts){
+  const na=normName(a.name);
+  let score=-1;
+  if(na===q)score=0; else if(na.startsWith(q))score=1; else if(na.includes(q))score=2;
+  if(score>=0)cands.push({score:score+0.5,kind:'account',rec:a,
+   label:`${a.name} (corporate — ${a.count} facilit${a.count>1?'ies':'y'})`});
+ }
+ cands.sort((x,y)=>x.score-y.score);
+ if(!cands.length)return {name,status:'none',options:[]};
+ const exact=cands.filter(c=>c.score===0);
+ if(exact.length===1)return {name,status:'ok',pick:exact[0],options:cands.slice(0,12)};
+ if(cands.length===1)return {name,status:'ok',pick:cands[0],options:cands};
+ return {name,status:exact.length?'ambiguous':'fuzzy',pick:cands[0],options:cands.slice(0,12)};
+}
+function runBulkMatch(){
+ const lines=splitBulk($('#bulkInput').value);
+ if(!lines.length){toast('Paste the list of locations first.');return}
+ if(!DIRECTORY){toast('Unlock or load the company directory first.');return}
+ BULK=lines.map(matchLocation);
+ renderBulk();
+}
+function renderBulk(){
+ const box=$('#bulkResults');
+ if(!BULK.length){box.innerHTML='';return}
+ const ok=BULK.filter(b=>b.status==='ok').length;
+ const chk=BULK.filter(b=>b.status==='ambiguous'||b.status==='fuzzy').length;
+ const bad=BULK.filter(b=>b.status==='none').length;
+ box.innerHTML=`<div class="bsum">
+   <span class="ok">✓ ${ok} matched</span>
+   ${chk?`<span>⚠ ${chk} need a quick check</span>`:''}
+   ${bad?`<span class="bad">✗ ${bad} not found</span>`:''}
+  </div>`
+ +BULK.map((b,i)=>{
+  const ic=b.status==='ok'?['ok','✓']:b.status==='none'?['bad','✗']:['warn','⚠'];
+  const r=b.pick?b.pick.rec:null;
+  const to=r?[r.me,r.ie].filter(Boolean).join(', '):'';
+  return `<div class="bmatch"><div class="bi ${ic[0]}">${ic[1]}</div>
+   <div class="bn"><b>${esc(b.name)}</b>
+    <span class="sub">${b.status==='none'?'No match in the directory — it will be skipped.'
+      :esc(to||'no email on file')}</span></div>
+   ${b.options.length>1?`<select onchange="pickBulk(${i},this.value)">
+     ${b.options.map((o,j)=>`<option value="${j}"${b.pick===o?' selected':''}>${esc(o.label)}</option>`).join('')}
+    </select>`:''}
+   <button class="btn small" onclick="dropBulk(${i})">Remove</button></div>`}).join('')
+ +`<div class="row" style="margin-top:.9rem">
+    <button class="btn primary big" onclick="draftBulk()">✉ Draft all ${ok+chk} emails</button>
+    <span class="hint" style="margin:0">They go to the review list — nothing sends by itself.</span>
+   </div>`;
+}
+function pickBulk(i,j){BULK[i].pick=BULK[i].options[+j];BULK[i].status='ok';renderBulk()}
+function dropBulk(i){BULK.splice(i,1);renderBulk()}
+function draftBulk(){
+ const use=BULK.filter(b=>b.pick&&b.status!=='none');
+ if(!use.length){toast('Nothing matched to draft.');return}
+ const both=$('#bulkBoth').checked;
+ let made=0,skipped=0;
+ for(const b of use){
+  const saved=lookupPick;
+  lookupPick=b.pick;
+  const before=S.drafts.length;
+  draftFromLookup(both?'both':'billing');
+  if(S.drafts.length>before)made++;else skipped++;
+  lookupPick=saved;
+ }
+ renderLookupDetail();
+ $('#reviewCard').scrollIntoView({behavior:'smooth',block:'start'});
+ toast(`${made} draft${made===1?'':'s'} ready for review${skipped?` — ${skipped} skipped (no email on file)`:''}. Nothing has been sent.`);
+}
+
+/* ---------------- Outlook export (.eml drafts) ---------------- */
+function mimeWord(s){
+ return /^[\x20-\x7E]*$/.test(s)?s
+  :'=?UTF-8?B?'+btoa(String.fromCharCode(...new TextEncoder().encode(s)))+'?=';
+}
+function emlFor(d){
+ const from=(S.settings.fromAddress||'').trim();
+ const body=new TextEncoder().encode(d.body);
+ let b64=btoa(String.fromCharCode(...body)).replace(/(.{76})/g,'$1\r\n');
+ return [
+  'X-Unsent: 1',                       // tells Outlook this is an unsent draft
+  from?`From: ${from}`:'',
+  `To: ${d.to}`,
+  `Subject: ${mimeWord(d.subject)}`,
+  'MIME-Version: 1.0',
+  'Content-Type: text/plain; charset=UTF-8',
+  'Content-Transfer-Encoding: base64','',b64,''
+ ].filter(x=>x!==null).join('\r\n');
+}
+function crc32(u8){let c=-1;
+ for(let i=0;i<u8.length;i++){c^=u8[i];
+  for(let k=0;k<8;k++)c=(c>>>1)^(0xEDB88320&-(c&1))}
+ return (c^-1)>>>0}
+function zipStore(files){                        // files: [{name, data:Uint8Array}]
+ const enc=new TextEncoder(),parts=[],central=[];let off=0;
+ const dt=new Date(),dosT=((dt.getHours()<<11)|(dt.getMinutes()<<5)|(dt.getSeconds()/2))&0xFFFF;
+ const dosD=(((dt.getFullYear()-1980)<<9)|((dt.getMonth()+1)<<5)|dt.getDate())&0xFFFF;
+ const u16=v=>[v&255,(v>>8)&255], u32=v=>[v&255,(v>>8)&255,(v>>16)&255,(v>>>24)&255];
+ for(const f of files){
+  const nm=enc.encode(f.name),crc=crc32(f.data),sz=f.data.length;
+  const lh=[...u32(0x04034b50),...u16(20),...u16(0),...u16(0),...u16(dosT),...u16(dosD),
+   ...u32(crc),...u32(sz),...u32(sz),...u16(nm.length),...u16(0)];
+  parts.push(new Uint8Array(lh),nm,f.data);
+  central.push([...u32(0x02014b50),...u16(20),...u16(20),...u16(0),...u16(0),...u16(dosT),...u16(dosD),
+   ...u32(crc),...u32(sz),...u32(sz),...u16(nm.length),...u16(0),...u16(0),...u16(0),...u16(0),
+   ...u32(0),...u32(off),...nm]);
+  off+=lh.length+nm.length+sz;
+ }
+ const cd=central.flat(),cdArr=new Uint8Array(cd);
+ const end=new Uint8Array([...u32(0x06054b50),...u16(0),...u16(0),
+  ...u16(files.length),...u16(files.length),...u32(cdArr.length),...u32(off),...u16(0)]);
+ let total=0;parts.forEach(p=>total+=p.length);
+ const out=new Uint8Array(total+cdArr.length+end.length);let q=0;
+ parts.forEach(p=>{out.set(p,q);q+=p.length});
+ out.set(cdArr,q);q+=cdArr.length;out.set(end,q);
+ return out;
+}
+function safeName(s,i){
+ return String(i+1).padStart(2,'0')+'-'+String(s||'email').replace(/[^A-Za-z0-9 _-]/g,'').trim().slice(0,50)+'.eml';
+}
+function exportOutlookDrafts(onlyUnsent){
+ const list=S.drafts.filter(d=>!d.sentAt&&(!onlyUnsent||true));
+ if(!list.length){toast('No drafts to export.');return}
+ const enc=new TextEncoder();
+ const files=list.map((d,i)=>{const c=byId(d.custId);
+  return {name:safeName(c?(c.property||c.name):d.subject,i),data:enc.encode(emlFor(d))}});
+ const zip=zipStore(files);
+ const u=URL.createObjectURL(new Blob([zip],{type:'application/zip'}));
+ const a=document.createElement('a');a.href=u;a.download='outlook-drafts.zip';a.click();
+ setTimeout(()=>URL.revokeObjectURL(u),1000);
+ toast(`${files.length} Outlook draft${files.length===1?'':'s'} downloaded. Unzip, then drag them into your Drafts folder.`);
+}
+function exportOneEml(id){
+ const d=S.drafts.find(x=>x.id===id);if(!d)return;
+ const c=byId(d.custId);
+ const u=URL.createObjectURL(new Blob([emlFor(d)],{type:'message/rfc822'}));
+ const a=document.createElement('a');a.href=u;a.download=safeName(c?(c.property||c.name):d.subject,0);a.click();
+ setTimeout(()=>URL.revokeObjectURL(u),1000);
+ toast('Opened as an Outlook draft — press Send there.');
+}
+
 /* ---------------- import ---------------- */
 const HEAD={name:['accountname','account','customer','customername','company','companyname','name','tenant','client'],
  property:['propertyname','property','facility','facilityname','site','sitename','location'],
@@ -1147,7 +1358,8 @@ $('#saveTpl').onclick=()=>{S.settings.templates={subject:$('#tplSubject').value,
  save();toast('Wording saved — new drafts will use it.')};
 $('#resetTpl').onclick=()=>{S.settings.templates={...DEFAULTS};renderSettings();save();toast('Default wording restored.')};
 $('#saveRules').onclick=()=>{S.settings.lateDays=Math.max(1,+$('#setLate').value||35);
- S.settings.gapDays=Math.max(1,+$('#setGap').value||7);save();render();toast('Saved.')};
+ S.settings.gapDays=Math.max(1,+$('#setGap').value||7);
+ S.settings.fromAddress=$('#setFrom').value.trim();save();render();toast('Saved.')};
 $('#exportBtn').onclick=()=>{const b=new Blob([JSON.stringify(S,null,1)],{type:'application/json'});
  const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='coverage-chaser-backup.json';a.click();
  URL.revokeObjectURL(u);toast('Backup downloaded.')};
@@ -1230,6 +1442,15 @@ $('#lookupResults').addEventListener('click',e=>{
 });
 document.addEventListener('click',e=>{if(!e.target.closest('#lookupCard'))hideLookupResults()});
 renderLookupHint();
+
+/* bulk list wiring */
+$('#bulkToggle').onclick=()=>{const b=$('#bulkBody');const on=b.style.display==='none';
+ b.style.display=on?'':'none';$('#bulkToggle').textContent=on?'Close':'Open';
+ if(on)$('#bulkInput').focus()};
+$('#bulkMatch').onclick=runBulkMatch;
+$('#bulkClear').onclick=()=>{$('#bulkInput').value='';BULK=[];renderBulk()};
+$('#exportOutlook').onclick=()=>exportOutlookDrafts();
+
 
 
 /* If anything above throws, the page must not look merely "broken and unclickable" —

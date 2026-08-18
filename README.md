@@ -66,6 +66,29 @@ address, or add a contact to the chase list for the recurring late-report sequen
 The same lookup runs inside **Add customer**, so typing a name there fills in the contact,
 email, phone, property and software for you.
 
+## Working from Accounting's list (10+ at a time)
+
+Accounting sends the list of locations that owe a coverage report. Paste it into
+**📋 Paste the list from Accounting** — one location per line, or a column pasted straight
+out of Excel (a header row like "Facility Name" is ignored). Every name is matched against
+the directory and you get a summary: matched, needs-a-quick-check (with a dropdown to pick
+the right one), and not-found. Then **Draft all** writes every email in one go, each
+addressed to the facility manager and the billing contact.
+
+To get them into Outlook, press **📥 Save all to Outlook** in the review list. That
+downloads `outlook-drafts.zip` containing one `.eml` per location. Unzip it and either:
+
+- **drag the files into your Outlook Drafts folder** — they appear as drafts, ready to send; or
+- **double-click any file** — it opens as a composed message with a Send button.
+
+The files carry the `X-Unsent` header, which is what makes Outlook treat them as unsent
+drafts rather than received mail. Set **Your email address** in Settings → *How often to
+chase* so the From line matches the account you send from. Individual drafts also have
+their own **📥 Outlook draft** button.
+
+This never sends anything — it hands Outlook a stack of prepared messages and you press
+Send on each.
+
 ## Company directory (auto-fill contacts)
 
 The client list ships with the app as **`directory.enc.json`**, encrypted with AES-256-GCM
