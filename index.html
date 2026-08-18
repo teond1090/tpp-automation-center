@@ -162,6 +162,14 @@ details.guide li{margin-bottom:.3rem;font-size:.86rem}
 .dropzone{border:2px dashed var(--axis);border-radius:12px;padding:1.1rem;text-align:center;color:var(--ink-2);font-size:.88rem}
 .dropzone.drag{border-color:var(--accent);background:var(--accent-soft)}
 .simnote{font-size:.72rem;color:var(--muted);border:1px solid var(--grid);border-radius:8px;padding:.15rem .5rem}
+.attn-item{display:flex;align-items:center;gap:.7rem;padding:.55rem 0;border-bottom:1px solid var(--grid);font-size:.88rem}
+.attn-item:last-child{border-bottom:0}
+.attn-item .ic{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-size:1rem;flex:none;background:var(--surface-2)}
+.attn-item .ic.warn{background:var(--warn-soft)}.attn-item .ic.crit{background:var(--critical-soft)}.attn-item .ic.ok{background:var(--good-soft)}
+.attn-item .tx{flex:1}.attn-item .tx .hint{display:block}
+.steps{counter-reset:s;list-style:none;margin:.6rem 0;padding:0}
+.steps li{counter-increment:s;display:flex;gap:.7rem;align-items:flex-start;margin-bottom:.6rem;font-size:.9rem}
+.steps li::before{content:counter(s);flex:none;width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;display:grid;place-items:center;font-size:.8rem}
 </style>
 </head>
 <body>
@@ -169,7 +177,7 @@ details.guide li{margin-bottom:.3rem;font-size:.86rem}
 <header class="app">
   <div class="appbar">
     <div class="brand">
-      <div class="logo">TPP</div>
+      <div class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3z" fill="#fff" opacity=".92"/><path d="M8.2 12.3l2.6 2.6 5-5.2" stroke="#1c5cab" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
       <div>
         <h1>Automation Center</h1>
         <div class="sub">Coverage Reports &amp; Collections &middot; Tenant Property Protection</div>
@@ -205,10 +213,12 @@ details.guide li{margin-bottom:.3rem;font-size:.86rem}
 
 <!-- ================= DASHBOARD ================= -->
 <section class="view on" id="v-dash">
-  <div class="kgroup"><p class="glabel">Coverage report metrics</p><div class="kpis" id="kCoverage"></div></div>
-  <div class="kgroup"><p class="glabel">Collections metrics</p><div class="kpis" id="kCollections"></div></div>
-  <div class="kgroup"><p class="glabel">Outreach metrics</p><div class="kpis" id="kOutreach"></div></div>
-  <div class="kgroup"><p class="glabel">Automation metrics</p><div class="kpis" id="kAutomation"></div></div>
+  <div id="dashWelcome"></div>
+  <div id="dashAttn"></div>
+  <div class="kgroup"><p class="glabel">Coverage reports</p><div class="kpis" id="kCoverage"></div></div>
+  <div class="kgroup"><p class="glabel">Money owed</p><div class="kpis" id="kCollections"></div></div>
+  <div class="kgroup"><p class="glabel">Outreach</p><div class="kpis" id="kOutreach"></div></div>
+  <div class="kgroup"><p class="glabel">Automation health</p><div class="kpis" id="kAutomation"></div></div>
   <div class="grid2">
     <div class="card">
       <h3>Past-due aging</h3>
@@ -278,12 +288,13 @@ details.guide li{margin-bottom:.3rem;font-size:.86rem}
     <div class="row spread">
       <h2 style="margin:0">Outbox</h2>
       <div class="row">
-        <button class="btn primary" id="sendAllBtn">Send all queued</button>
+        <button class="btn" id="approveAllBtn">✓ Approve all</button>
+        <button class="btn primary" id="sendAllBtn">Send all approved</button>
       </div>
     </div>
-    <p class="hint">Automation drafts every message; each send is recorded, scheduled follow-ups advance automatically, and
-      replies are matched back to the account. Use <i>Open in mail app</i> or <i>Copy</i> to dispatch from this demo, or
-      <i>Mark sent</i> to simulate the production email service.</p>
+    <p class="hint">Automation only <b>drafts</b> messages — nothing goes out on its own. Review each draft below, then
+      <b>Approve</b> it (or use <i>Approve all</i>). Only approved messages can be sent, opened in your mail app, or
+      printed as a letter. Every send is recorded and replies are matched back to the account.</p>
     <div id="outboxList"></div>
   </div>
 </section>
@@ -389,6 +400,9 @@ details.guide li{margin-bottom:.3rem;font-size:.86rem}
         </div></div>
       <div class="field"><b>Overdue multiplier (missing &times; threshold = “overdue” report)</b>
         <input type="number" id="setOverdueX" min="1" step="0.5" style="width:110px"></div>
+      <div class="field"><b>Approvals</b>
+        <label style="font-size:.85rem"><input type="checkbox" id="setApproval"> Require approval before any message can be sent, opened in a mail app, or printed</label>
+        <p class="hint" style="margin:.2rem 0 0">Recommended. Only the Admin role can approve. Turning this off lets any role with send permission dispatch drafts immediately.</p></div>
       <div class="row"><button class="btn primary" id="saveRules">Save rules</button></div>
       <div class="note">Monitored mailboxes: <b>reports@tenantpropertyprotection.com</b> (coverage reports) and
         <b>collections@tenantpropertyprotection.com</b> (payments &amp; replies).</div>
@@ -400,6 +414,10 @@ details.guide li{margin-bottom:.3rem;font-size:.86rem}
       <div class="field"><b>Coverage report request</b><textarea id="tplCoverage" rows="8"></textarea></div>
       <div class="field"><b>Past due balance reminder</b><textarea id="tplCollections" rows="8"></textarea></div>
       <div class="field"><b>Final notice</b><textarea id="tplFinal" rows="6"></textarea></div>
+      <div class="field"><b>SMS — coverage report reminder</b><textarea id="tplSmsCov" rows="3" style="min-height:70px"></textarea></div>
+      <div class="field"><b>SMS — past due reminder</b><textarea id="tplSmsCol" rows="3" style="min-height:70px"></textarea></div>
+      <p class="hint">SMS templates are used by the <i>Copy SMS</i> buttons in the Outbox and account view — paste the text
+        into your texting service.</p>
       <div class="row"><button class="btn primary" id="saveTpl">Save templates</button>
         <button class="btn" id="resetTpl">Restore defaults</button></div>
     </div>
@@ -497,11 +515,13 @@ Outstanding items:
 Please respond within 7 days or this account will be escalated to our Customer Success and Collections teams for direct follow-up.
 
 Thank you,
-Tenant Property Protection`};
+Tenant Property Protection`,
+smsCoverage:`Hi {{CustomerName}}, it's Tenant Property Protection. We haven't received the monthly coverage report for {{PropertyName}} yet — you can email it to ${REPORTS_ADDR}. Questions? Just reply. Thank you!`,
+smsCollections:`Hi {{CustomerName}}, Tenant Property Protection here. Friendly reminder: {{AccountName}} has an outstanding balance of {{AmountDue}}. Reply or email us with any questions. Thank you!`};
 
 const ROLE_LABEL={admin:'Admin',cs:'Customer Success',accounting:'Accounting',ops:'Operations',viewer:'Viewer'};
 const PERMS={
- admin:['import','send','verify','resolve','task','settings','clock','run','escalate'],
+ admin:['import','send','approve','verify','resolve','task','settings','clock','run','escalate'],
  cs:['import','send','resolve','task','clock','run','escalate'],
  accounting:['import','send','verify','resolve','task','clock','run','escalate'],
  ops:['task','clock','run'],
@@ -515,9 +535,10 @@ function guard(p,what){ if(can(p))return true;
 function fresh(){return{ver:1,accounts:[],outbox:[],inbound:[],tasks:[],tickets:[],auditLog:[],dismissed:[],
  counters:{emailsSent:0,responses:0,reportsCollected:0,paymentsCollected:0},
  settings:{thresholdDays:35,overdueX:2,cadence:{r1:3,r2:7,fin:14,esc:21},role:'admin',clockOffset:0,
-  templates:{...DEFAULT_TEMPLATES}}}}
+  requireApproval:true,templates:{...DEFAULT_TEMPLATES}}}}
 let S; try{S=JSON.parse(localStorage.getItem(LS))||fresh()}catch(e){S=fresh()}
 S.settings.templates=Object.assign({...DEFAULT_TEMPLATES},S.settings.templates);
+if(S.settings.requireApproval===undefined)S.settings.requireApproval=true;
 function save(){try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}}
 function uid(){return Math.random().toString(36).slice(2,9)}
 function now(){return new Date(Date.now()+ (S.settings.clockOffset||0)*DAY)}
@@ -581,7 +602,9 @@ function fill(tpl,a,extra={}){
   AmountDue:fmt$(a.amountDue),PMS:a.pms||'your property management software',...extra};
  return tpl.replace(/\{\{(\w+)\}\}/g,(_,k)=>map[k]??`{{${k}}}`);
 }
-const STEP_LABEL={initial:'Initial outreach',r1:'Reminder #1 (Day 3)',r2:'Reminder #2 (Day 7)',fin:'Final notice (Day 14)'};
+function stepLabel(step){const c=S.settings.cadence;
+ return {initial:'Initial outreach',r1:`Reminder #1 (Day ${c.r1})`,r2:`Reminder #2 (Day ${c.r2})`,
+  fin:`Final notice (Day ${c.fin})`,pms:'PMS onboarding'}[step]||'One-off'}
 function buildEmails(a,step){
  const covOpen=a.flags.missingReport&&!a.coverageResolved;
  const colOpen=a.flags.pastDue&&!a.collectionsResolved;
@@ -606,8 +629,8 @@ function queueEmail(a,step){
   if(S.outbox.some(o=>!o.sentAt&&o.accId===a.id&&o.kind===m.kind&&o.step===step))continue;
   S.outbox.unshift({id:uid(),accId:a.id,step,...m,queuedAt:new Date().toISOString(),simDay:iso(now()),sentAt:null});n++;
  }
- if(n){alog(a,`${STEP_LABEL[step]||step} drafted (${n} email${n>1?'s':''})`);
-  audit('outreach.queued',`${STEP_LABEL[step]||step} → ${a.name}`,a.id)}
+ if(n){alog(a,`${stepLabel(step)} drafted (${n} email${n>1?'s':''})`);
+  audit('outreach.queued',`${stepLabel(step)} → ${a.name}`,a.id)}
  return n;
 }
 
@@ -646,27 +669,84 @@ function runAutomation(silent){
  }
  audit('automation.run',`Scan complete — ${queued} message(s) drafted, ${esc} escalation(s)`);
  save();renderAll();
- if(!silent)toast(queued||esc?`Automation run: ${queued} email(s) drafted, ${esc} escalation(s). Check the Outbox.`:'Automation run: everything is on schedule — nothing new due.');
+ if(!silent)toast(queued||esc?`Automation run: ${queued} draft(s) created, ${esc} escalation(s). ${S.settings.requireApproval?'They are waiting for your approval in the Outbox — nothing sends without it.':'Review them in the Outbox.'}`:'Automation run: everything is on schedule — nothing new due.');
 }
 
-/* ---------------- sending ---------------- */
-function sendMail(id){
- if(!guard('send','send emails'))return;
- const o=S.outbox.find(x=>x.id===id);if(!o||o.sentAt)return;
+/* ---------------- approval & sending ---------------- */
+function releasable(o){return !S.settings.requireApproval||!!o.approvedAt}
+function approveMail(id){
+ if(!guard('approve','approve messages'))return;
+ const o=S.outbox.find(x=>x.id===id);if(!o||o.sentAt||o.approvedAt)return;
+ o.approvedAt=new Date().toISOString();o.approvedBy=ROLE_LABEL[S.settings.role];
+ audit('email.approved',`"${o.subject}" → ${o.to}`,o.accId);
+ save();renderAll();
+}
+function approveAll(){
+ if(!guard('approve','approve messages'))return;
+ const q=S.outbox.filter(o=>!o.sentAt&&!o.approvedAt);
+ q.forEach(o=>{o.approvedAt=new Date().toISOString();o.approvedBy=ROLE_LABEL[S.settings.role];
+  audit('email.approved',`"${o.subject}" → ${o.to}`,o.accId)});
+ save();renderAll();
+ toast(q.length?`${q.length} draft(s) approved — they can be sent now.`:'Nothing waiting for approval.');
+}
+function discardMail(id){
+ if(!guard('send','discard drafts'))return;
+ const i=S.outbox.findIndex(x=>x.id===id);if(i<0||S.outbox[i].sentAt)return;
+ const o=S.outbox[i];S.outbox.splice(i,1);
+ const a=byId(o.accId);if(a)alog(a,`Draft discarded: ${o.subject}`);
+ audit('email.discarded',`"${o.subject}" → ${o.to}`,o.accId);
+ save();renderAll();toast('Draft discarded — it will not be sent.');
+}
+function markSent(o){
  o.sentAt=new Date().toISOString();o.sentSimDay=iso(now());
  S.counters.emailsSent++;
  const a=byId(o.accId);
  if(a){a.emailsSent=(a.emailsSent||0)+1;a.lastSentDay=iso(now());alog(a,`Sent: ${o.subject}`)}
  audit('email.sent',`"${o.subject}" → ${o.to}`,o.accId);
- save();renderAll();
+}
+function sendMail(id){
+ if(!guard('send','send emails'))return;
+ const o=S.outbox.find(x=>x.id===id);if(!o||o.sentAt)return;
+ if(!releasable(o)){toast('This draft has not been approved yet — approve it first.');return}
+ markSent(o);save();renderAll();
 }
 function sendAll(){ if(!guard('send','send emails'))return;
- const q=S.outbox.filter(o=>!o.sentAt);q.forEach(o=>{
-  o.sentAt=new Date().toISOString();o.sentSimDay=iso(now());S.counters.emailsSent++;
-  const a=byId(o.accId);if(a){a.emailsSent=(a.emailsSent||0)+1;a.lastSentDay=iso(now());alog(a,`Sent: ${o.subject}`)}
-  audit('email.sent',`"${o.subject}" → ${o.to}`,o.accId)});
- save();renderAll();toast(`${q.length} email(s) sent.`);
+ const q=S.outbox.filter(o=>!o.sentAt&&releasable(o));
+ const held=S.outbox.filter(o=>!o.sentAt&&!releasable(o)).length;
+ q.forEach(markSent);
+ save();renderAll();
+ toast(q.length?`${q.length} email(s) sent.${held?` ${held} draft(s) still need approval.`:''}`
+  :held?`Nothing sent — ${held} draft(s) are waiting for approval.`:'Outbox is empty.');
 }
+function printLetter(id){
+ const o=S.outbox.find(x=>x.id===id);if(!o)return;
+ if(!o.sentAt&&!releasable(o)){toast('Approve this draft before printing it as a letter.');return}
+ const a=byId(o.accId);
+ const w=window.open('','_blank');
+ if(!w){toast('Pop-up blocked — allow pop-ups to print letters.');return}
+ w.document.write(`<!doctype html><html><head><title>${esc(o.subject)}</title><style>
+  body{font:14px/1.6 Georgia,'Times New Roman',serif;color:#111;max-width:640px;margin:3rem auto;padding:0 1.5rem}
+  .lh{border-bottom:3px solid #1c5cab;padding-bottom:.8rem;margin-bottom:1.6rem}
+  .lh b{font-size:1.25rem;color:#1c5cab;letter-spacing:.02em}
+  .lh div{font-size:.8rem;color:#555}
+  .meta{margin-bottom:1.6rem;font-size:.9rem;color:#333}
+  pre{white-space:pre-wrap;font:inherit}
+  @media print{body{margin:1rem auto}}
+  </style></head><body>
+  <div class="lh"><b>Tenant Property Protection</b><div>${REPORTS_ADDR} · ${COLLECTIONS_ADDR}</div></div>
+  <div class="meta">${new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'})}<br>
+   ${a?esc(a.contact||a.name)+'<br>'+esc(a.name)+(a.property?'<br>'+esc(a.property):''):esc(o.to)}<br><br>
+   <b>Re: ${esc(o.subject)}</b></div>
+  <pre>${esc(o.body)}</pre>
+  <script>window.print()<\/script></body></html>`);
+ w.document.close();
+ audit('letter.printed',`"${o.subject}" → ${o.to}`,o.accId);
+}
+function smsFor(a,kind){
+ const tpl=kind==='collections'?S.settings.templates.smsCollections:S.settings.templates.smsCoverage;
+ return fill(tpl,a);
+}
+function copySms(accId,kind){const a=byId(accId);if(!a)return;copyText(smsFor(a,kind))}
 function byId(id){return S.accounts.find(a=>a.id===id)}
 
 /* ---------------- intelligent response processing (Step 6) ---------------- */
@@ -737,15 +817,16 @@ function verifyPayment(a){
 
 /* ---------------- import (Step 1) ---------------- */
 const HEAD_MAP={accountname:'name',account:'name',customer:'name',
- propertyname:'property',property:'property',facility:'property',
- customercontact:'contact',contact:'contact',contactname:'contact',
- emailaddress:'email',email:'email',
- phonenumber:'phone',phone:'phone',
- pastdueamount:'amountDue',amountdue:'amountDue',balance:'amountDue',outstandingbalance:'amountDue',
- pastduedays:'pastDueDays',dayspastdue:'pastDueDays',agingdays:'pastDueDays',
- coveragereportstatus:'reportStatus',reportstatus:'reportStatus',
- lastreportreceiveddate:'lastReportDate',lastreportdate:'lastReportDate',lastreport:'lastReportDate',
- propertymanagementsoftware:'pms',pms:'pms',software:'pms'};
+ customername:'name',company:'name',companyname:'name',tenant:'name',
+ propertyname:'property',property:'property',facility:'property',facilityname:'property',site:'property',sitename:'property',location:'property',
+ customercontact:'contact',contact:'contact',contactname:'contact',contactperson:'contact',manager:'contact',
+ emailaddress:'email',email:'email',contactemail:'email',
+ phonenumber:'phone',phone:'phone',contactphone:'phone',cell:'phone',mobile:'phone',
+ pastdueamount:'amountDue',amountdue:'amountDue',balance:'amountDue',outstandingbalance:'amountDue',amount:'amountDue',balancedue:'amountDue',amountowed:'amountDue',
+ pastduedays:'pastDueDays',dayspastdue:'pastDueDays',agingdays:'pastDueDays',dayslate:'pastDueDays',aging:'pastDueDays',daysoverdue:'pastDueDays',
+ coveragereportstatus:'reportStatus',reportstatus:'reportStatus',coveragestatus:'reportStatus',
+ lastreportreceiveddate:'lastReportDate',lastreportdate:'lastReportDate',lastreport:'lastReportDate',lastreportreceived:'lastReportDate',lastreceived:'lastReportDate',
+ propertymanagementsoftware:'pms',pms:'pms',software:'pms',managementsoftware:'pms',system:'pms',platform:'pms'};
 function normHead(h){return String(h||'').toLowerCase().replace(/[^a-z]/g,'')}
 function parseCSV(text){
  const rows=[];let row=[],cell='',q=false;
@@ -857,13 +938,15 @@ const REC_FN={
    subject:`Set up automatic monthly reports from ${a.pms}`,
    body:fill(`Hello {{CustomerName}},\n\nThanks for sending this month's coverage report!\n\nTo save you the task next month, {{PMS}} can deliver your report automatically. ${pmsSteps(a.pms)}\n\nOnce scheduled, reports arrive at ${REPORTS_ADDR} every month with no action needed on your side.\n\nThank you,\nTenant Property Protection`,a),
    queuedAt:new Date().toISOString(),simDay:iso(now()),sentAt:null});
-  audit('outreach.queued',`PMS automation invite → ${a.name}`,a.id);save();renderAll();toast('Invite drafted — see Outbox.')}};
+  audit('outreach.queued',`PMS automation invite → ${a.name}`,a.id);save();renderAll();toast('Invite drafted — waiting for approval in the Outbox.')}};
 
 /* ---------------- PMS guides (Step 8) ---------------- */
 const PMS_GUIDES=[
  {name:'SiteLink',steps:['Open SiteLink Web Edition and go to the Corporate Control Center.','Choose Reports → Scheduled Reports → Add Schedule.','Select the Insurance / Coverage Activity report for your site.','Set frequency to Monthly, on the 1st, format XLSX or CSV.',`Set the delivery email to ${REPORTS_ADDR} and save.`]},
  {name:'storEDGE',steps:['Log in to storEDGE and open Reports.','Open the Insurance or Tenant Protection report and click Schedule.','Choose Recurring → Monthly and pick the first of the month.',`Add ${REPORTS_ADDR} as the recipient and confirm.`]},
  {name:'Cubby',steps:['In Cubby, go to Reports → Report Subscriptions.','Create a subscription for the Coverage / Protection report.','Set the cadence to Monthly.',`Enter ${REPORTS_ADDR} as the destination address and enable the subscription.`]},
+ {name:'Easy Storage Solutions',steps:['Log in to Easy Storage Solutions and open the Reports section.','Select the Insurance / Protection Plan report for your facility.','Choose Email Report → Recurring and set the frequency to Monthly.',`Enter ${REPORTS_ADDR} as the recipient and save the schedule.`]},
+ {name:'Storage Commander',steps:['Open Storage Commander and go to Reports → Report Scheduler.','Add the Insurance Activity (or Coverage) report to the schedule.','Set it to run monthly on the 1st, output CSV or Excel.',`Set the delivery email to ${REPORTS_ADDR} and save.`]},
  {name:'Other platforms',steps:['Open your platform’s reporting or exports area.','Find the report showing tenant coverage / protection activity.','Schedule a recurring monthly delivery (CSV or Excel).',`Send it automatically to ${REPORTS_ADDR}.`]}];
 function pmsSteps(pms){
  const g=PMS_GUIDES.find(g=>g.name.toLowerCase()===String(pms||'').toLowerCase())||PMS_GUIDES[3];
@@ -887,7 +970,45 @@ function metrics(){
   b30:bucket(30,60),b60:bucket(60,90),b90:bucket(90,0),bU:bucket(0,30),
   manual,autoA,rate:touched.length?Math.round(100*resolvedTouched.length/touched.length):null};
 }
+function gotoAccounts(queue){showView('accounts');$('#fltQueue').value=queue||'';renderAccounts()}
+function renderWelcome(){
+ $('#dashWelcome').innerHTML=S.accounts.length?'':`<div class="card">
+  <h2>👋 Welcome to your Automation Center</h2>
+  <p class="hint">Three steps and the chasing is off your plate — and nothing is ever sent without your approval.</p>
+  <ol class="steps">
+   <li><div><b>Import your customer list</b><br><span class="hint">Upload the CSV/Excel you export today, paste rows, or try the sample data.</span></div></li>
+   <li><div><b>Run automation</b><br><span class="hint">Every account is sorted into Missing Report, Past Due or Priority, and personalized drafts are written for you.</span></div></li>
+   <li><div><b>Review &amp; approve</b><br><span class="hint">Drafts wait in the Outbox until you approve them. You stay in control of every message.</span></div></li>
+  </ol>
+  <div class="row">
+   <button class="btn primary" onclick="gotoAccounts('')">Import my list</button>
+   <button class="btn" onclick="loadSample()">Try it with sample data</button>
+  </div></div>`;
+}
+function renderAttention(){
+ if(!S.accounts.length){$('#dashAttn').innerHTML='';return}
+ const wait=S.outbox.filter(o=>!o.sentAt&&!releasable(o)).length;
+ const ready=S.outbox.filter(o=>!o.sentAt&&releasable(o)).length;
+ const verify=S.accounts.filter(a=>a.pendingPayment).length;
+ const tasks=S.tasks.filter(t=>!t.done).length+S.tickets.filter(t=>t.status==='open').length;
+ const pri=S.accounts.filter(a=>a.queue==='priority'&&a.status!=='resolved').length;
+ const it=(ic,cls,txt,sub,btn,fn)=>`<div class="attn-item"><div class="ic ${cls}">${ic}</div>
+  <div class="tx"><b>${txt}</b><span class="hint">${sub}</span></div>
+  <button class="btn small primary" onclick="${fn}">${btn}</button></div>`;
+ const items=[
+  wait?it('✋','warn',`${wait} message${wait>1?'s':''} waiting for your approval`,'Nothing is sent until you approve it.','Review & approve',`showView('outbox')`):'',
+  ready?it('📤','',`${ready} approved message${ready>1?'s':''} ready to send`,'Approved and cleared to go out.','Open Outbox',`showView('outbox')`):'',
+  verify?it('💵','',`${verify} payment${verify>1?'s':''} to verify`,'Customers say they paid — confirm receipt to close the loop.','View accounts',`gotoAccounts('')`):'',
+  tasks?it('📋','',`${tasks} open task${tasks>1?'s':''} / ticket${tasks>1?'s':''}`,'Items that need a human touch.','Open tasks',`showView('queue')`):'',
+  pri?it('🔥','crit',`${pri} priority account${pri>1?'s':''}`,'Missing a report AND past due — your highest-risk customers.','See who',`gotoAccounts('priority')`):''
+ ].filter(Boolean);
+ $('#dashAttn').innerHTML=`<div class="card"><h3>What needs your attention</h3>
+  ${items.length?items.join(''):`<div class="attn-item"><div class="ic ok">✅</div>
+   <div class="tx"><b>You're all caught up</b><span class="hint">Nothing is waiting on you right now. Advance the clock or run automation to see what's next.</span></div></div>`}
+ </div>`;
+}
 function renderDash(){
+ renderWelcome();renderAttention();
  const m=metrics();
  $('#kCoverage').innerHTML=
   tile('Reports due',m.due,'accounts this cycle')+
@@ -908,7 +1029,7 @@ function renderDash(){
   tile('Fully automated',m.autoA.length,'no human touch needed','ok')+
   tile('Manual intervention',m.manual.length,'disputes, escalations, bad contacts',m.manual.length?'alert':'')+
   tile('Success rate',m.rate==null?'—':m.rate+'%','of contacted accounts resolved')+
-  tile('Open drafts',S.outbox.filter(o=>!o.sentAt).length,'waiting in outbox');
+  tile('Open drafts',S.outbox.filter(o=>!o.sentAt).length,'awaiting approval or send');
  // aging chart — single-hue sequential (magnitude of risk), direct-labeled
  const rows=[['Under 30',m.bU,'var(--seq-250)'],['30–59 days',m.b30,'var(--seq-400)'],
   ['60–89 days',m.b60,'var(--seq-550)'],['90+ days',m.b90,'var(--seq-550)']];
@@ -954,16 +1075,26 @@ function mailtoHref(o){return `mailto:${encodeURIComponent(o.to)}?subject=${enco
 function renderOutbox(){
  const items=S.outbox.slice(0,120);
  $('#outboxList').innerHTML=items.length?items.map(o=>{const a=byId(o.accId);
+  const state=o.sentAt?['b-ok','Sent']:releasable(o)?['b-pending',o.approvedAt?'Approved — ready to send':'Ready to send']:['b-missing','Awaiting approval'];
+  const kind=o.kind==='collections'?'collections':'coverage';
+  const smsBtn=a&&(o.kind==='coverage'||o.kind==='collections')?`<button class="btn small" onclick="copySms('${a.id}','${kind}')">Copy SMS</button>`:'';
   return `<div class="mail"><div class="mh">
-   <span class="badge ${o.sentAt?'b-ok':'b-pending'}">${o.sentAt?'Sent':'Queued'}</span>
+   <span class="badge ${state[0]}">${state[1]}</span>
    <span class="msub">${esc(o.subject)}</span>
    <span class="mto">to ${esc(o.to)}${a?` · ${esc(a.name)}`:''}</span>
-   <span class="stamp" style="margin-left:auto">${STEP_LABEL[o.step]||'One-off'} · ${o.sentAt?('sent '+fmtDate(o.sentSimDay)):('drafted '+fmtDate(o.simDay))}</span></div>
+   <span class="stamp" style="margin-left:auto">${stepLabel(o.step)} · ${o.sentAt?('sent '+fmtDate(o.sentSimDay)):('drafted '+fmtDate(o.simDay))}${o.approvedAt?` · approved by ${esc(o.approvedBy||'Admin')}`:''}</span></div>
    <pre>${esc(o.body)}</pre>
-   <div class="row">${o.sentAt?'':`<button class="btn small primary" onclick="sendMail('${o.id}')">Mark sent</button>`}
-    <a class="btn small" href="${mailtoHref(o)}">Open in mail app</a>
-    <button class="btn small" onclick="copyText(${JSON.stringify(o.subject+'\n\n'+o.body).replace(/"/g,'&quot;')})">Copy</button></div></div>`}).join('')
-  :'<p class="empty">Nothing here yet — run automation to draft outreach for flagged accounts.</p>';
+   <div class="row">
+    ${o.sentAt?`<button class="btn small" onclick="printLetter('${o.id}')">Print letter</button>`:releasable(o)
+      ?`<button class="btn small primary" onclick="sendMail('${o.id}')">Mark sent</button>
+        <a class="btn small" href="${mailtoHref(o)}">Open in mail app</a>
+        <button class="btn small" onclick="printLetter('${o.id}')">Print letter</button>`
+      :`<button class="btn small primary" onclick="approveMail('${o.id}')">✓ Approve</button>`}
+    <button class="btn small" onclick="copyText(${JSON.stringify(o.subject+'\n\n'+o.body).replace(/"/g,'&quot;')})">Copy</button>
+    ${smsBtn}
+    ${o.sentAt?'':`<button class="btn small danger" onclick="discardMail('${o.id}')">Discard</button>`}
+   </div></div>`}).join('')
+  :'<p class="empty">Nothing here yet — run automation to draft outreach for flagged accounts. Drafts wait here for your approval before anything is sent.</p>';
 }
 function renderInbox(){
  $('#inboxList').innerHTML=S.inbound.length?S.inbound.slice(0,60).map(r=>{const a=byId(r.accId);
@@ -994,7 +1125,7 @@ function renderQueue(){
 function renderPms(){
  $('#pmsGuides').innerHTML=PMS_GUIDES.map(g=>{
   const affected=S.accounts.filter(a=>a.flags?.missingReport&&(g.name==='Other platforms'
-   ? a.pms&&!PMS_GUIDES.slice(0,3).some(x=>x.name.toLowerCase()===a.pms.toLowerCase())
+   ? a.pms&&!PMS_GUIDES.slice(0,-1).some(x=>x.name.toLowerCase()===a.pms.toLowerCase())
    : (a.pms||'').toLowerCase()===g.name.toLowerCase()));
   return `<details class="guide"><summary>${g.name}
    ${affected.length?`<span class="badge b-missing">${affected.length} missing report${affected.length>1?'s':''}</span>`:''}</summary>
@@ -1039,12 +1170,16 @@ function renderChrome(){
  const set=(id,n)=>{const el=$(id);el.textContent=n;el.classList.toggle('show',n>0)};
  set('#pillAcc',pri);set('#pillOut',outQ);set('#pillTask',tq);
  $('#runBtn').disabled=!can('run');$('#clockAdv').disabled=!can('clock');$('#sendAllBtn').disabled=!can('send');
+ $('#approveAllBtn').disabled=!can('approve');
+ $('#approveAllBtn').style.display=S.settings.requireApproval?'':'none';
 }
 function renderSettings(){
  const s=S.settings;
  $('#setThreshold').value=s.thresholdDays;$('#setOverdueX').value=s.overdueX;
  $('#setR1').value=s.cadence.r1;$('#setR2').value=s.cadence.r2;$('#setFinal').value=s.cadence.fin;$('#setEsc').value=s.cadence.esc;
  $('#tplCoverage').value=s.templates.coverage;$('#tplCollections').value=s.templates.collections;$('#tplFinal').value=s.templates.final;
+ $('#tplSmsCov').value=s.templates.smsCoverage;$('#tplSmsCol').value=s.templates.smsCollections;
+ $('#setApproval').checked=!!s.requireApproval;
 }
 function renderAll(){renderChrome();renderDash();renderAccounts();renderOutbox();renderInbox();renderQueue();renderPms();renderInsights();renderAudit()}
 
@@ -1068,7 +1203,9 @@ function openDrawer(id){
    ${a.pendingPayment?`<button class="btn small primary" onclick="drawerVerify('${a.id}')">✓ Verify payment</button>`:''}
    ${a.status!=='resolved'&&!a.escalated?`<button class="btn small" onclick="drawerEsc('${a.id}')">⚠ Escalate now</button>`:''}
    ${a.manual?`<button class="btn small" onclick="drawerResume('${a.id}')">▶ Resume automation</button>`:''}
-   ${a.pms?`<button class="btn small" onclick="recAct('','pmsInvite','${a.id}')">✉ Send PMS setup guide</button>`:''}
+   ${a.pms?`<button class="btn small" onclick="recAct('','pmsInvite','${a.id}')">✉ Draft PMS setup guide</button>`:''}
+   ${a.flags?.missingReport&&!a.coverageResolved?`<button class="btn small" onclick="copySms('${a.id}','coverage')">📱 Copy SMS reminder</button>`:''}
+   ${a.flags?.pastDue&&!a.collectionsResolved?`<button class="btn small" onclick="copySms('${a.id}','collections')">📱 Copy past-due SMS</button>`:''}
   </div>
   <h3>Activity</h3>
   <ul class="timeline">${(a.log||[]).slice(0,25).map(l=>`<li><b>${fmtDate(l.at)}</b> — ${esc(l.txt)}</li>`).join('')||'<li>No activity yet.</li>'}</ul>`;
@@ -1095,14 +1232,14 @@ function recAct(recId,fn,arg){REC_FN[fn]&&REC_FN[fn](arg)}
 function sendGuideAll(pms){
  if(!guard('send','send emails'))return;
  const list=S.accounts.filter(a=>a.flags?.missingReport&&a.email&&(pms==='Other platforms'
-  ? a.pms&&!PMS_GUIDES.slice(0,3).some(x=>x.name.toLowerCase()===a.pms.toLowerCase())
+  ? a.pms&&!PMS_GUIDES.slice(0,-1).some(x=>x.name.toLowerCase()===a.pms.toLowerCase())
   : (a.pms||'').toLowerCase()===pms.toLowerCase()));
  list.forEach(a=>{S.outbox.unshift({id:uid(),accId:a.id,step:'pms',kind:'pms',to:a.email,
   subject:`Set up automatic monthly reports from ${a.pms||'your software'}`,
   body:fill(`Hello {{CustomerName}},\n\nYou can stop sending monthly coverage reports by hand — {{PMS}} can deliver them automatically. ${pmsSteps(a.pms)}\n\nOnce scheduled, reports arrive at ${REPORTS_ADDR} every month with no action needed on your side.\n\nThank you,\nTenant Property Protection`,a),
   queuedAt:new Date().toISOString(),simDay:iso(now()),sentAt:null});
   audit('outreach.queued',`PMS onboarding guide (${pms}) → ${a.name}`,a.id)});
- save();renderAll();toast(`${list.length} guide email(s) drafted — see Outbox.`);
+ save();renderAll();toast(`${list.length} guide email(s) drafted — waiting for approval in the Outbox.`);
 }
 function copyText(t){
  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('Copied.'))
@@ -1123,6 +1260,7 @@ $('#clockAdv').onclick=()=>{if(!guard('clock','advance the clock'))return;
  audit('clock.advanced','Simulated day +1 (nightly automation sweep)');
  runAutomation(true);toast('Advanced one day — nightly automation sweep ran.')};
 $('#sendAllBtn').onclick=sendAll;
+$('#approveAllBtn').onclick=approveAll;
 $('#fileInput').onchange=e=>{if(e.target.files[0])handleFile(e.target.files[0]);e.target.value=''};
 $('#pasteBtn').onclick=()=>{const w=$('#pasteWrap');w.style.display=w.style.display==='none'?'block':'none'};
 $('#pasteGo').onclick=()=>{if(!guard('import','import customer lists'))return;
@@ -1158,10 +1296,12 @@ $('#saveRules').onclick=()=>{if(!guard('settings','change settings'))return;
  const s=S.settings;
  s.thresholdDays=Math.max(1,+$('#setThreshold').value||35);s.overdueX=Math.max(1,+$('#setOverdueX').value||2);
  s.cadence={r1:+$('#setR1').value||3,r2:+$('#setR2').value||7,fin:+$('#setFinal').value||14,esc:+$('#setEsc').value||21};
- S.accounts.forEach(classify);audit('settings.updated',`Threshold ${s.thresholdDays}d, cadence ${s.cadence.r1}/${s.cadence.r2}/${s.cadence.fin}/${s.cadence.esc}`);
+ s.requireApproval=$('#setApproval').checked;
+ S.accounts.forEach(classify);audit('settings.updated',`Threshold ${s.thresholdDays}d, cadence ${s.cadence.r1}/${s.cadence.r2}/${s.cadence.fin}/${s.cadence.esc}, approval ${s.requireApproval?'required':'off'}`);
  save();renderAll();toast('Automation rules saved and accounts re-classified.')};
 $('#saveTpl').onclick=()=>{if(!guard('settings','change settings'))return;
- S.settings.templates={coverage:$('#tplCoverage').value,collections:$('#tplCollections').value,final:$('#tplFinal').value};
+ S.settings.templates={coverage:$('#tplCoverage').value,collections:$('#tplCollections').value,final:$('#tplFinal').value,
+  smsCoverage:$('#tplSmsCov').value,smsCollections:$('#tplSmsCol').value};
  audit('templates.updated','Email templates edited');save();toast('Templates saved.')};
 $('#resetTpl').onclick=()=>{if(!guard('settings','change settings'))return;
  S.settings.templates={...DEFAULT_TEMPLATES};renderSettings();save();toast('Default templates restored.')};

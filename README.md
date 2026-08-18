@@ -21,8 +21,9 @@ Quick tour:
 
 1. **Accounts** tab → *Load sample data* (or upload/paste your own CSV/Excel list).
 2. Press **⚙ Run automation** — flagged accounts get personalized outreach drafted.
-3. **Outbox** → send the drafts; use **+1 day** to watch the Day 3 / 7 / 14 / 21
-   follow-up sequence and Day-21 escalations play out.
+3. **Outbox** → review and **approve** each draft (nothing is ever sent without approval),
+   then send; use **+1 day** to watch the Day 3 / 7 / 14 / 21 follow-up sequence and
+   Day-21 escalations play out.
 4. **Inbox** → simulate customer replies; the AI classifier updates statuses, creates
    dispute tickets and internal tasks automatically.
 5. **Dashboard**, **AI Insights** and **Audit Log** show metrics, recommendations,
@@ -30,14 +31,19 @@ Quick tour:
 
 ## Features
 
+- **Approval workflow** — every draft waits for explicit (Admin) approval before it can be
+  sent, opened in a mail app, or printed; toggleable in Settings, on by default
 - CSV / Excel / pasted-list import with tolerant column matching
 - Automatic classification: Missing Coverage Report, Past Due, Priority Follow-Up Queue
-- Personalized outreach emails from editable templates
+- Personalized outreach emails from editable templates, plus editable SMS reminder
+  templates and printable letters on TPP letterhead
+- Dashboard action center ("What needs your attention") and guided first-run setup
 - Day 3 / 7 / 14 / 21 automated follow-up sequence with internal escalation tasks
 - AI reply classification (report submitted, payment sent, dispute, wrong contact,
   out-of-office, assistance, general) driving automatic status transitions
 - Simulated monitoring of reports@ / collections@ mailboxes with attachment matching
-- SiteLink / storEDGE / Cubby / generic PMS onboarding guides with one-click guide emails
+- SiteLink / storEDGE / Cubby / Easy Storage Solutions / Storage Commander / generic PMS
+  onboarding guides with one-click guide emails
 - Dashboard: coverage, collections aging, outreach and automation metric groups
 - AI recommendations and a 0–100 Customer Compliance Score
 - Role-based permissions (Admin / Customer Success / Accounting / Operations / Viewer)
