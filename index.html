@@ -174,7 +174,7 @@ details.help li{margin-bottom:.3rem}
     <div class="logo"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3z" fill="#fff" opacity=".92"/><path d="M8.2 12.3l2.6 2.6 5-5.2" stroke="#1c5cab" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <div class="brand">
       <h1>Coverage Report Chaser</h1>
-      <div class="sub">Tenant Property Protection <span class="ver">v5 · Aug 18</span></div>
+      <div class="sub">Tenant Property Protection <span class="ver">v6 · Aug 18</span></div>
     </div>
     <div class="right">
       <button class="btn" id="addBtn">+ Add customer</button>
@@ -299,9 +299,14 @@ details.help li{margin-bottom:.3rem}
       <p class="hint">Load your master client list once and the app fills in the billing contact, facility manager,
         email, phone and software for you — just start typing an account or facility name when you add a customer.</p>
       <div class="row">
-        <label class="btn primary"><input type="file" id="dirFile" accept=".xlsx,.xls,.csv,.json" hidden>Load master list…</label>
+        <label class="btn primary"><input type="file" id="dirFile" accept=".xlsx,.xls,.csv,.json" hidden>Load / update master list…</label>
+        <button class="btn" id="dirReplace">Replace entirely…</button>
+        <input type="file" id="dirFileReplace" accept=".xlsx,.xls,.csv,.json" hidden>
         <button class="btn" id="dirClear">Remove directory</button>
       </div>
+      <p class="hint" style="margin-top:.5rem"><b>Updates add to what you already have.</b> Loading a newer file adds new
+        facilities and refreshes changed details, and keeps everything else — so you can load a small file with just your
+        new customers instead of the whole list. Use <i>Replace entirely</i> only if you want to start from scratch.</p>
       <p class="hint" style="margin-top:.5rem">The directory is stored <b>only in this browser</b> — it is never uploaded
         and is not part of the website. Anyone else who uses this tool loads their own copy the same way.
         Re-load the file whenever your master list changes.</p>
@@ -634,7 +639,8 @@ const DIR_LS='tpp-directory-v1';
 let DIRECTORY=null, DIR_IDX={accounts:[],facilities:[]};
 try{DIRECTORY=JSON.parse(localStorage.getItem(DIR_LS))||null}catch(e){DIRECTORY=null}
 
-const DH={acct:['account','accountname','corporateaccount','corporatename'],
+const DH={lid:['locationid','locid','siteid'],
+ acct:['account','accountname','corporateaccount','corporatename'],
  fac:['companyfacilityname','facilityname','companyname','facility','propertyname'],
  city:['facilitycity','corporationcity','city'],state:['facilitystate','corporationstate','state'],
  status:['idstatus','status'],
@@ -668,7 +674,7 @@ function dirFromRows(rows){
   const g=k=>k in idx?dClean(r[idx[k]]):'';
   const a=g('acct'),f=g('fac');
   if(!a&&!f)continue;
-  const rec={a,f,c:g('city'),s:g('state'),st:g('status'),
+  const rec={lid:g('lid'),a,f,c:g('city'),s:g('state'),st:g('status'),
    m:g('mgr'),me:dEmail(g('mgrEmail')),mp:dPhone(g('mgrPhone')),
    i:g('inv'),ie:dEmail(g('invEmail')),ip:dPhone(g('invPhone')),
    sw:g('sw'),rm:g('rm')};
@@ -693,29 +699,52 @@ function dirFromWorkbook(wb){
   if(seen.has(k))continue;seen.add(k);out.push(r)}
  return out;
 }
-function setDirectory(facilities,source){
- if(!facilities.length){toast('No client rows found in that file — check it has Account / Facility and email columns.');return}
- DIRECTORY={source,at:new Date().toISOString(),facilities};
- try{localStorage.setItem(DIR_LS,JSON.stringify(DIRECTORY))}
- catch(e){toast('That list is too large for this browser to store.');DIRECTORY=null;return}
- buildDirIndex();renderDirStat();renderLookupHint();
- toast(`Directory loaded — ${DIR_IDX.facilities.length} facilities, ${DIR_IDX.accounts.length} corporate accounts.`);
+function dirKey(r){
+ return String(r.lid||'').trim().toLowerCase()
+  || ((r.a||'')+'|'+(r.f||'')+'|'+(r.ie||r.me||'')).toLowerCase();
 }
-function loadDirFile(file){
+/* Merge new rows into what is already loaded: existing records are updated in
+   place, new ones are appended, and records absent from the new file are kept. */
+function setDirectory(facilities,source,mode){
+ if(!facilities.length){toast('No client rows found in that file — check it has Account / Facility and email columns.');return}
+ const prev=(mode==='replace'||!DIRECTORY||!DIRECTORY.facilities)?[]:DIRECTORY.facilities;
+ const map=new Map(prev.map(r=>[dirKey(r),r]));
+ let added=0,updated=0;
+ for(const r of facilities){
+  const k=dirKey(r);
+  if(map.has(k)){
+   const cur=map.get(k),next={...cur};
+   let changed=false;
+   for(const[f,v]of Object.entries(r)){if(v&&v!==cur[f]){next[f]=v;changed=true}}
+   if(changed){map.set(k,next);updated++}
+  }else{map.set(k,r);added++}
+ }
+ const merged=[...map.values()];
+ const kept=merged.length-added-updated;
+ const before=DIRECTORY;
+ DIRECTORY={source,at:new Date().toISOString(),facilities:merged};
+ try{localStorage.setItem(DIR_LS,JSON.stringify(DIRECTORY))}
+ catch(e){toast('That list is too large for this browser to store.');DIRECTORY=before;return}
+ buildDirIndex();renderDirStat();renderLookupHint();
+ toast(prev.length
+  ? `Directory updated — ${added} new, ${updated} changed, ${kept} unchanged (${merged.length} total).`
+  : `Directory loaded — ${DIR_IDX.facilities.length} facilities, ${DIR_IDX.accounts.length} corporate accounts.`);
+}
+function loadDirFile(file,mode){
  const ext=file.name.split('.').pop().toLowerCase();
  const rd=new FileReader();
  if(ext==='xlsx'||ext==='xls'){
   if(!window.XLSX){toast('Excel reader still loading — try again in a moment.');return}
-  rd.onload=e=>{try{setDirectory(dirFromWorkbook(XLSX.read(new Uint8Array(e.target.result),{type:'array'})),file.name)}
+  rd.onload=e=>{try{setDirectory(dirFromWorkbook(XLSX.read(new Uint8Array(e.target.result),{type:'array'})),file.name,mode)}
    catch(err){toast('That Excel file could not be read.')}};
   rd.readAsArrayBuffer(file);
  }else if(ext==='json'){
   rd.onload=e=>{try{const d=JSON.parse(e.target.result);
-   setDirectory(Array.isArray(d)?d:(d.facilities||[]),file.name)}
+   setDirectory(Array.isArray(d)?d:(d.facilities||[]),file.name,mode)}
    catch(err){toast('That JSON file could not be read.')}};
   rd.readAsText(file);
  }else{
-  rd.onload=e=>setDirectory(dirFromRows(parseCSV(e.target.result)),file.name);
+  rd.onload=e=>setDirectory(dirFromRows(parseCSV(e.target.result)),file.name,mode);
   rd.readAsText(file);
  }
 }
@@ -728,16 +757,19 @@ function buildDirIndex(){
   if(!f.a)continue;
   const k=f.a.toLowerCase();
   let e=byA.get(k);
-  if(!e){e={name:f.a,n:0,bill:new Map(),sw:new Map()};byA.set(k,e)}
-  e.n++;
+  if(!e){e={name:f.a,n:0,bill:new Map(),sw:new Map(),facs:[]};byA.set(k,e)}
+  e.n++;e.facs.push(f);
   if(f.ie){const c=e.bill.get(f.ie)||{n:0,name:f.i,phone:f.ip};c.n++;c.name=c.name||f.i;e.bill.set(f.ie,c)}
   if(f.sw)e.sw.set(f.sw,(e.sw.get(f.sw)||0)+1);
  }
  const top=m=>[...m.entries()].sort((x,y)=>(y[1].n||y[1])-(x[1].n||x[1]))[0];
  for(const e of byA.values()){
   const b=top(e.bill),s=top(e.sw);
+  const sole=e.n===1?e.facs[0]:null;      // one facility → we know its manager too
   DIR_IDX.accounts.push({kind:'account',name:e.name,count:e.n,
    ie:b?b[0]:'',i:b?b[1].name:'',ip:b?b[1].phone:'',sw:s?s[0]:'',
+   m:sole?sole.m:'',me:sole?sole.me:'',mp:sole?sole.mp:'',
+   f:sole?sole.f:'',c:sole?sole.c:'',s:sole?sole.s:'',rm:sole?sole.rm:'',st:sole?sole.st:'',
    choices:[...e.bill.entries()].map(([em,c])=>({e:em,n:c.name}))});
  }
  DIR_IDX.accounts.sort((a,b)=>a.name.localeCompare(b.name));
@@ -765,7 +797,7 @@ function applyPick(p){
  dirPick=p;
  const r=p.rec,src=contactSource();
  const bill={e:r.ie||'',n:r.i||'',p:r.ip||''};
- const mgr=p.kind==='account'?{e:'',n:'',p:''}:{e:r.me||'',n:r.m||'',p:r.mp||''};
+ const mgr={e:r.me||'',n:r.m||'',p:r.mp||''};
  const use=(src==='manager'&&mgr.e)?mgr:(bill.e?bill:mgr);
  $('#fName').value=p.kind==='account'?r.name:(r.a||r.f);
  $('#fProperty').value=p.kind==='facility'?(r.f||''):'';
@@ -831,9 +863,10 @@ function renderLookupDetail(){
  if(!lookupPick){box.innerHTML='';return}
  const p=lookupPick,r=p.rec,isAcct=p.kind==='account';
  const bill={n:r.i||'',e:r.ie||'',p:r.ip||''};
- const mgr=isAcct?{n:'',e:'',p:''}:{n:r.m||'',e:r.me||'',p:r.mp||''};
+ const mgr={n:r.m||'',e:r.me||'',p:r.mp||''};
  const title=isAcct?r.name:(r.f||r.a);
- const subBits=isAcct?[`${r.count} facilit${r.count>1?'ies':'y'}`]
+ const subBits=isAcct?[`${r.count} facilit${r.count>1?'ies':'y'}`,r.count===1&&r.f?r.f:'',
+   r.count===1?[r.c,r.s].filter(Boolean).join(', '):''].filter(Boolean)
   :[r.a&&r.a!==r.f?r.a:'',[r.c,r.s].filter(Boolean).join(', ')].filter(Boolean);
  const rm=(r.rm||'').toLowerCase(),auto=/api|automated/.test(rm);
  const meta=[r.sw?`<span class="pill">${esc(r.sw)}</span>`:'',
@@ -885,8 +918,7 @@ function draftFromLookup(which){
  if(!lookupPick){toast('Search for a facility first.');return}
  const r=lookupPick.rec,isAcct=lookupPick.kind==='account';
  const bill={role:'billing',name:r.i||'',email:(r.ie||'').toLowerCase(),phone:r.ip||''};
- const mgr=isAcct?{role:'manager',name:'',email:'',phone:''}
-  :{role:'manager',name:r.m||'',email:(r.me||'').toLowerCase(),phone:r.mp||''};
+ const mgr={role:'manager',name:r.m||'',email:(r.me||'').toLowerCase(),phone:r.mp||''};
  let picked = which==='billing'?[bill] : which==='manager'?[mgr] : [mgr,bill];
  picked=picked.filter(x=>x.email);
  // never address the same mailbox twice
@@ -1062,6 +1094,10 @@ $('#srcRow').addEventListener('click',e=>{
 });
 $('#dirFile').onchange=e=>{if(e.target.files[0])loadDirFile(e.target.files[0]);e.target.value=''};
 $('#dirFile2').onchange=e=>{if(e.target.files[0])loadDirFile(e.target.files[0]);e.target.value=''};
+$('#dirReplace').onclick=()=>{
+ if(!confirm('Replace the whole directory with a new file?\n\nAnything not in the new file will be removed. Cancel if you meant to just add updates.'))return;
+ $('#dirFileReplace').click()};
+$('#dirFileReplace').onchange=e=>{if(e.target.files[0])loadDirFile(e.target.files[0],'replace');e.target.value=''};
 $('#dirClear').onclick=()=>{
  if(!confirm('Remove the loaded directory from this browser? Your customers are not affected.'))return;
  DIRECTORY=null;localStorage.removeItem(DIR_LS);buildDirIndex();renderDirStat();clearLookup();renderLookupHint();toast('Directory removed.')};
@@ -1095,8 +1131,19 @@ document.addEventListener('click',e=>{if(!e.target.closest('#lookupCard'))hideLo
 renderLookupHint();
 
 
+/* If anything above throws, the page must not look merely "broken and unclickable" —
+   say so plainly instead of leaving a dead UI. */
+window.addEventListener('error',ev=>{
+ if(window.__bootOk)return;
+ const b=document.getElementById('banner');
+ if(b)b.innerHTML='<div class="banner act"><span class="big-ic">⚠️</span><div><b>This page did not load correctly</b>'
+  +'<span class="hint">Try a hard refresh (Ctrl+Shift+R). If it keeps happening, tell Terry what this says: '
+  +esc(ev.message)+'</span></div></div>';
+});
+
 /* boot */
 renderSettings();renderPms();render();save();
+window.__bootOk=true;
 </script>
 </body>
 </html>
